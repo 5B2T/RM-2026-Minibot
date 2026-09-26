@@ -1,0 +1,60 @@
+# CMake build trees and generated files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Makefile
+install_manifest.txt
+
+# JetBrains / CLion local project files
+.idea/
+*.iml
+
+# STM32CubeIDE / Eclipse local metadata and build outputs
+.settings/
+.project
+.cproject
+Debug/
+Release/
+*.launch
+
+# ARM GCC / embedded compiler intermediates
+*.o
+*.obj
+*.d
+*.a
+*.suo
+*.user
+*.bak
+*.tmp
+*.swp
+
+# Firmware and linker output files
+*.elf
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.list
+*.eep
+*.uf2
+
+# Compiler and static-analysis reports
+*.su
+*.gcda
+*.gcno
+*.gcov
+
+# Test and tooling output
+Testing/
+coverage/
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
