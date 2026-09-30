@@ -18,18 +18,6 @@ static void Motor_InitOne(Motor_HandleTypeDef* Motorx)
     HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_RESET);
 }
 
-static void Motor_Forward(Motor_HandleTypeDef* Motorx)
-{
-    HAL_GPIO_WritePin(Motorx->Motor_A_GPIOx, Motorx->Motor_A_GPIO_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_RESET);
-}
-
-static void Motor_Reverse(Motor_HandleTypeDef* Motorx)
-{
-    HAL_GPIO_WritePin(Motorx->Motor_A_GPIOx, Motorx->Motor_A_GPIO_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_SET);
-}
-
 static int Motor_Limit(int PWM)
 {
     if(PWM<0)PWM=-PWM;
@@ -39,6 +27,8 @@ static int Motor_Limit(int PWM)
 
 void Motor_Init(void)
 {
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_ALL);
+
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_SET);
 
@@ -83,6 +73,18 @@ void Motor_Init(void)
     Motor_InitOne(&Motor2);
     Motor_InitOne(&Motor3);
     Motor_InitOne(&Motor4);
+}
+
+static void Motor_Forward(Motor_HandleTypeDef* Motorx)
+{
+    HAL_GPIO_WritePin(Motorx->Motor_A_GPIOx, Motorx->Motor_A_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_RESET);
+}
+
+static void Motor_Reverse(Motor_HandleTypeDef* Motorx)
+{
+    HAL_GPIO_WritePin(Motorx->Motor_A_GPIOx, Motorx->Motor_A_GPIO_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_SET);
 }
 
 void Motor_Load(int Motor1_PWM, int Motor2_PWM, int Motor3_PWM, int Motor4_PWM)

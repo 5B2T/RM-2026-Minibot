@@ -23,7 +23,7 @@ typedef struct
 
     TIM_HandleTypeDef* Motor_PWM_TIMx;
     uint32_t Motor_PWM_Channel;
-    
+
     int Motor_PWM;
 }Motor_HandleTypeDef;
 
