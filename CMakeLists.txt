@@ -36,7 +36,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         Peripheral/Driver/Start.c
         Peripheral/Driver/Start.h
         Peripheral/Driver/Motor.c
-        Peripheral/Driver/Motor.h)
+        Peripheral/Driver/Motor.h
+        Peripheral/Driver/Encoder.c
+        Peripheral/Driver/Encoder.h)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
