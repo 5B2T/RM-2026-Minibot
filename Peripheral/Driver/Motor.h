@@ -5,8 +5,6 @@
 #ifndef RM_2026_MINIBOT_MOTOR_H
 #define RM_2026_MINIBOT_MOTOR_H
 #include <stdint.h>
-#include "stm32f407xx.h"
-#include "stm32f4xx_hal_gpio.h"
 #include "tim.h"
 
 //电机PWM M1-4分别为PE9 11 13 14

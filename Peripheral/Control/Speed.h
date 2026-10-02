@@ -11,7 +11,7 @@
 #define SPEED_RATIO 30.0f
 #define SPEED_DIA 0.075f
 #define SPEED_SAMPLE_TIME 0.01f
-#define SPEED_CPR 1560f
+#define SPEED_CPR 1560.0f
 
 typedef struct
 {
