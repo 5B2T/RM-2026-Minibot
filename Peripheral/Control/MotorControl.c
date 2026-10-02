@@ -61,7 +61,7 @@ void MotorControl_Update(void)
         MotorPWM[t]=(int)Output;
     }
 
-    Motor_Load(MotorPWM[0], MotorPWM[1], MotorPWM[2], MotorPWM[3]);
+    Motor_Load(MotorPWM);
 }
 
 void MotorControl_Stop(void)
@@ -73,5 +73,7 @@ void MotorControl_Stop(void)
         MotorControl[t].MotorControl_Out=0;
     }
 
-    Motor_Load(0, 0, 0, 0);
+    int Motor_StopPWM[4]={0,0,0,0};
+
+    Motor_Load(Motor_StopPWM);
 }

@@ -25,13 +25,10 @@ typedef struct
     int Motor_PWM;
 }Motor_HandleTypeDef;
 
-extern Motor_HandleTypeDef Motor1;
-extern Motor_HandleTypeDef Motor2;
-extern Motor_HandleTypeDef Motor3;
-extern Motor_HandleTypeDef Motor4;
+extern Motor_HandleTypeDef Motor[4];
 
 void Motor_Init(void);
-void Motor_Load(int Motor1_PWM, int Motor2_PWM, int Motor3_PWM, int Motor4_PWM);
+void Motor_Load(int* Motor_PWM);
 void Motor_Stop(Motor_HandleTypeDef* Motorx);
 
 #endif //RM_2026_MINIBOT_MOTOR_H

@@ -7,10 +7,7 @@
 #include "stm32f4xx_hal_gpio.h"
 #include <stdlib.h>
 
-Motor_HandleTypeDef Motor1;
-Motor_HandleTypeDef Motor2;
-Motor_HandleTypeDef Motor3;
-Motor_HandleTypeDef Motor4;
+Motor_HandleTypeDef Motor[4];
 
 static void Motor_InitOne(Motor_HandleTypeDef* Motorx)
 {
@@ -32,47 +29,43 @@ void Motor_Init(void)
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_SET);
 
-    Motor1=(Motor_HandleTypeDef){
+    Motor[0]=(Motor_HandleTypeDef){
         GPIOB,
         GPIO_PIN_0,
         GPIOB,
         GPIO_PIN_1,
         &htim1,
         TIM_CHANNEL_1,
-        0
-    };
-    Motor2=(Motor_HandleTypeDef){
+        0};
+    Motor[1]=(Motor_HandleTypeDef){
         GPIOB,
         GPIO_PIN_2,
         GPIOB,
         GPIO_PIN_10,
         &htim1,
         TIM_CHANNEL_2,
-        0
-    };
-    Motor3=(Motor_HandleTypeDef){
+        0};
+    Motor[2]=(Motor_HandleTypeDef){
         GPIOD,
         GPIO_PIN_0,
         GPIOD,
         GPIO_PIN_1,
         &htim1,
         TIM_CHANNEL_3,
-        0
-    };
-    Motor4=(Motor_HandleTypeDef){
+        0};
+    Motor[3]=(Motor_HandleTypeDef){
         GPIOD,
         GPIO_PIN_2,
         GPIOD,
         GPIO_PIN_3,
         &htim1,
         TIM_CHANNEL_4,
-        0
-    };
+        0};
 
-    Motor_InitOne(&Motor1);
-    Motor_InitOne(&Motor2);
-    Motor_InitOne(&Motor3);
-    Motor_InitOne(&Motor4);
+    for(uint8_t t=0;t<4;t++)
+    {
+        Motor_InitOne(&Motor[t]);
+    }
 }
 
 static void Motor_Forward(Motor_HandleTypeDef* Motorx)
@@ -87,26 +80,18 @@ static void Motor_Reverse(Motor_HandleTypeDef* Motorx)
     HAL_GPIO_WritePin(Motorx->Motor_B_GPIOx, Motorx->Motor_B_GPIO_Pin, GPIO_PIN_SET);
 }
 
-void Motor_Load(int Motor1_PWM, int Motor2_PWM, int Motor3_PWM, int Motor4_PWM)
+void Motor_Load(int* Motor_PWM)
 {
-    Motor1.Motor_PWM=Motor_Limit(Motor1_PWM);
-    Motor2.Motor_PWM=Motor_Limit(Motor2_PWM);
-    Motor3.Motor_PWM=Motor_Limit(Motor3_PWM);
-    Motor4.Motor_PWM=Motor_Limit(Motor4_PWM);
 
-    if(Motor1_PWM>0)Motor_Forward(&Motor1);
-    if(Motor1_PWM<0)Motor_Reverse(&Motor1);
-    if(Motor2_PWM>0)Motor_Forward(&Motor2);
-    if(Motor2_PWM<0)Motor_Reverse(&Motor2);
-    if(Motor3_PWM>0)Motor_Forward(&Motor3);
-    if(Motor3_PWM<0)Motor_Reverse(&Motor3);
-    if(Motor4_PWM>0)Motor_Forward(&Motor4);
-    if(Motor4_PWM<0)Motor_Reverse(&Motor4);
+    for(uint8_t t=0;t<4;t++)
+    {
+        Motor[t].Motor_PWM=Motor_Limit(Motor_PWM[t]);
 
-    __HAL_TIM_SET_COMPARE(Motor1.Motor_PWM_TIMx, Motor1.Motor_PWM_Channel, Motor1.Motor_PWM);
-    __HAL_TIM_SET_COMPARE(Motor2.Motor_PWM_TIMx, Motor2.Motor_PWM_Channel, Motor2.Motor_PWM);
-    __HAL_TIM_SET_COMPARE(Motor3.Motor_PWM_TIMx, Motor3.Motor_PWM_Channel, Motor3.Motor_PWM);
-    __HAL_TIM_SET_COMPARE(Motor4.Motor_PWM_TIMx, Motor4.Motor_PWM_Channel, Motor4.Motor_PWM);
+        if(Motor_PWM[t]>0)Motor_Forward(&Motor[t]);
+        if(Motor_PWM[t]<0)Motor_Reverse(&Motor[t]);
+
+        __HAL_TIM_SET_COMPARE(Motor[t].Motor_PWM_TIMx, Motor[t].Motor_PWM_Channel, Motor[t].Motor_PWM);
+    }
 }
 
 void Motor_Stop(Motor_HandleTypeDef* Motorx)
