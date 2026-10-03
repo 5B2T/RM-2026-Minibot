@@ -4,7 +4,6 @@
 
 #include "Motor.h"
 
-#include "stm32f4xx_hal_gpio.h"
 #include <stdlib.h>
 
 Motor_HandleTypeDef Motor[4];

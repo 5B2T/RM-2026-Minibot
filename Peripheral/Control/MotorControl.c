@@ -3,8 +3,6 @@
 //
 
 #include "MotorControl.h"
-#include "../Driver/Motor.h"
-#include "Speed.h"
 
 MotorControl_HandleTypeDef MotorControl[4];
 

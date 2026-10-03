@@ -5,6 +5,8 @@
 #ifndef RM_2026_MINIBOT_MOTORCONTROL_H
 #define RM_2026_MINIBOT_MOTORCONTROL_H
 #include <stdint.h>
+#include "../Driver/Motor.h"
+#include "Speed.h"
 
 #define MOTOR_CONTROL_KP 600.0f
 #define MOTOR_CONTROL_KI 80.0f
