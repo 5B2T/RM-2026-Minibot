@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "../../Peripheral/Driver/Start.h"
 #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
@@ -107,6 +108,8 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
+
+  ALL_Start();
 
   /* USER CODE END 2 */
 
