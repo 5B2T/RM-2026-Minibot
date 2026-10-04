@@ -23,7 +23,16 @@ static int Motor_Limit(int PWM)
 
 void Motor_Init(void)
 {
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_ALL);
+    // PWM start accepts one channel per call; TIM_CHANNEL_ALL is encoder-only here.
+    const uint32_t Channels[4]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_CHANNEL_3,TIM_CHANNEL_4};
+    for(uint8_t t=0;t<4;t++)
+    {
+        if(HAL_TIM_PWM_Start(&htim1, Channels[t])!=HAL_OK)
+        {
+            Error_Handler();
+            return;
+        }
+    }
 
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_SET);
