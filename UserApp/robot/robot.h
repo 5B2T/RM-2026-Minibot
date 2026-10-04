@@ -8,7 +8,7 @@ uint8_t Robot_Init(void);
 void Robot_ControlReset(void); // Called once by control task before its sampling loop.
 void Robot_ControlStep(float DtS); // Control owner, actual sampling interval in seconds.
 uint32_t Robot_CommunicationStep(void); // Communication owner, returns next delay in ms.
-uint32_t Robot_DisplayStep(void); // Display owner; recoverable errors, next delay in ms.
-// Atomic copy for future OLED/telemetry tasks; feedback reflects the last control cycle.
+uint32_t Robot_DisplayStep(void); // Power/display service owner; next polling delay in ms.
+// Each component is copied atomically; chassis and power have independent timestamps.
 void Robot_GetStatus(Robot_Status *Status);
 #endif

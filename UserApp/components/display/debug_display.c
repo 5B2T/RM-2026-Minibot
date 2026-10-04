@@ -59,12 +59,22 @@ static long Scaled(float Value, float Scale, float Limit)
     return (long)(Number+(Number>=0?0.5f:-0.5f));
 }
 static void Line(uint8_t Row, const char *Text) {OLED_DrawText(0,(int16_t)(Row*8),Text);}
+static void PowerValue(uint8_t Row,const char *Label,float Value,const char *Unit)
+{
+    char Text[22];
+    long Milli=Scaled(Value,1000,999999);
+    unsigned long Magnitude=(unsigned long)(Milli<0?-Milli:Milli);
+    (void)snprintf(Text,sizeof(Text),"%s %s%lu.%03lu %s",Label,Milli<0?"-":"",
+        Magnitude/1000,Magnitude%1000,Unit);
+    Line(Row,Text);
+}
 static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_State View)
 {
     char Text[22];
     OLED_Clear();
-    (void)snprintf(Text,sizeof(Text),"%u/3 %s",(unsigned)View.Page+1,
-        View.Page==DEBUG_PAGE_STATUS?"STATUS":View.Page==DEBUG_PAGE_SPEED?"SPEED":"PWM");
+    (void)snprintf(Text,sizeof(Text),"%u/%u %s",(unsigned)View.Page+1,(unsigned)DEBUG_PAGE_COUNT,
+        View.Page==DEBUG_PAGE_STATUS?"STATUS":View.Page==DEBUG_PAGE_SPEED?"SPEED":
+        View.Page==DEBUG_PAGE_PWM?"PWM":"POWER");
     Line(0,Text);
     if(View.Page==DEBUG_PAGE_STATUS)
     {
@@ -76,6 +86,28 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         Line(5,Text);
         (void)snprintf(Text,sizeof(Text),"AGE: %lu MS",(unsigned long)(NowMs-Status->TickMs));
         Line(6,Text);
+    }
+    else if(View.Page==DEBUG_PAGE_POWER)
+    {
+        const Robot_PowerStatus *Power=&Status->Power;
+        const char *State=Power->State==ROBOT_POWER_VALID?"INA219: OK":
+            Power->State==ROBOT_POWER_WAITING?"INA219: WAIT":
+            Power->State==ROBOT_POWER_OVERFLOW?"INA219: OVER RANGE":
+            Power->State==ROBOT_POWER_TIMEOUT?"INA219: TIMEOUT":
+            Power->State==ROBOT_POWER_STALE?"INA219: STALE":
+            Power->State==ROBOT_POWER_CONFIG_ERROR?"INA219: CONFIG ERR":
+            Power->State==ROBOT_POWER_INVALID?"INA219: BAD SAMPLE":"INA219: OFFLINE";
+        Line(1,State);
+        if(Power->Valid)
+        {
+            PowerValue(2,"V:",Power->VoltageV,"V");
+            PowerValue(3,"I:",Power->CurrentA,"A");
+            PowerValue(4,"P:",Power->PowerW,"W");
+            (void)snprintf(Text,sizeof(Text),"AGE: %lu MS",(unsigned long)(NowMs-Power->TickMs));
+            Line(5,Text);
+        }
+        else {Line(2,"V: -- V");Line(3,"I: -- A");Line(4,"P: -- W");}
+        Line(6,"SOC: --"); // Battery parameters / estimator not configured yet.
     }
     else
     {

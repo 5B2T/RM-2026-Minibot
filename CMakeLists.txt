@@ -45,6 +45,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/time/bsp_time.c
     Bsp/i2c/bsp_i2c.c
     Modules/display/oled.c
+    Modules/power/ina219.c
     Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c
@@ -54,6 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     UserApp/components/chassis/chassis.c
     UserApp/components/command/remote_control.c
     UserApp/components/display/debug_display.c
+    UserApp/components/power/power_monitor.c
     UserApp/robot/robot.c
     UserApp/os_task.c
 )

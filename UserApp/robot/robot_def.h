@@ -29,6 +29,16 @@ typedef struct
     } Target;
 } Robot_ChassisCommand;
 
+typedef enum {ROBOT_POWER_OFFLINE=0,ROBOT_POWER_WAITING,ROBOT_POWER_VALID,
+    ROBOT_POWER_OVERFLOW,ROBOT_POWER_TIMEOUT,ROBOT_POWER_CONFIG_ERROR,
+    ROBOT_POWER_INVALID,ROBOT_POWER_STALE} Robot_PowerState;
+typedef struct
+{
+    float VoltageV,CurrentA,PowerW; // Battery source side; discharge current/power positive.
+    uint32_t TickMs; // Last successful sample, including across tick wrap.
+    uint8_t Valid; // Numbers retained on error must not be displayed as valid.
+    Robot_PowerState State;
+} Robot_PowerStatus;
 typedef struct
 {
     float MeasuredSpeed[ROBOT_WHEEL_COUNT];
@@ -39,5 +49,6 @@ typedef struct
     uint8_t Connected;
     uint8_t Armed; // Command link authorizes motion; independent of actual driver enable.
     uint8_t MotorsEnabled;
+    Robot_PowerStatus Power; // Independently sampled with its own timestamp and validity.
 } Robot_Status;
 #endif

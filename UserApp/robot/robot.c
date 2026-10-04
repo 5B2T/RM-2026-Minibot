@@ -8,12 +8,15 @@
 #include "time/bsp_time.h"
 #include "i2c/bsp_i2c.h"
 #include "components/display/debug_display.h"
+#include "components/power/power_monitor.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
 static Robot_Status StatusSnapshot;
 static uint8_t RadioRecoveryPending;
 static uint8_t Ready;
+static uint8_t DisplayScheduled;
+static uint32_t DisplayTick,DisplayDelay;
 _Static_assert(RX_PLOAD_WIDTH==REMOTE_CONTROL_FRAME_SIZE, "Radio payload must match protocol");
 
 uint8_t Robot_Init(void)
@@ -22,7 +25,9 @@ uint8_t Robot_Init(void)
     memset(&StatusSnapshot, 0, sizeof(StatusSnapshot));
     RadioRecoveryPending=0;
     RemoteControl_Init();
-    (void)BSP_I2C_Init(); // Display failure must not prevent chassis initialization.
+    PowerMonitor_Init();
+    DisplayScheduled=0;
+    (void)BSP_I2C_Init(); // Sensor/display failure must not prevent chassis initialization.
     if(!BSP_Motor_Init() || !BSP_Encoder_Init() || !Chassis_Init())
     {
         BSP_Motor_Disable();
@@ -87,10 +92,17 @@ void Robot_GetStatus(Robot_Status *Status)
     taskENTER_CRITICAL();
     *Status=StatusSnapshot;
     taskEXIT_CRITICAL();
+    Status->Power=PowerMonitor_GetStatus(BSP_TimeMs());
 }
 uint32_t Robot_DisplayStep(void)
 {
+    uint32_t NowMs=BSP_TimeMs();
+    PowerMonitor_Step(NowMs);
+    if(DisplayScheduled && (uint32_t)(NowMs-DisplayTick)<DisplayDelay)return ROBOT_DISPLAY_POLL_MS;
     Robot_Status Status;
     Robot_GetStatus(&Status);
-    return DebugDisplay_Step(&Status,BSP_TimeMs());
+    DisplayDelay=DebugDisplay_Step(&Status,BSP_TimeMs());
+    DisplayTick=BSP_TimeMs();
+    DisplayScheduled=1;
+    return ROBOT_DISPLAY_POLL_MS; // Sensor polling continues during OLED retry delays.
 }

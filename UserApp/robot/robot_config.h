@@ -36,4 +36,13 @@
 #define ROBOT_DISPLAY_REFRESH_MS 500U
 #define ROBOT_DISPLAY_PAGE_MS 5000U
 #define ROBOT_DISPLAY_RETRY_MS 1000U
+// R100 (0.1 ohm), A0/A1 open jumpers, seven-bit address.
+// +/-320 mV covers +/-3.2 A; 0.1 mA register scaling covers that range.
+#define ROBOT_INA219_ADDRESS 0x40U
+#define ROBOT_INA219_SHUNT_OHM 0.1f
+#define ROBOT_INA219_CURRENT_LSB_A 0.0001f
+#define ROBOT_POWER_SAMPLE_MS 100U
+#define ROBOT_POWER_CONVERSION_TIMEOUT_MS 100U
+#define ROBOT_POWER_RETRY_MS 1000U
+#define ROBOT_POWER_STALE_MS 500U
 #endif
