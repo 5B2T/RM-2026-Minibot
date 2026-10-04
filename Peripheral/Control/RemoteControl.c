@@ -38,19 +38,32 @@ static uint16_t RemoteControl_CRC16(const uint8_t* Data, uint8_t Length)
     return Crc;
 }
 
+// Caller holds the task critical section; motor outputs remain owned by control task.
+static void RemoteControl_ClearConnection(void)
+{
+    RemoteControl_State.HasFrame=0;
+    RemoteControl_State.Armed=0;
+    RemoteControl_State.MotionValid=0;
+    RemoteControl_State.StopPending=1;
+    RemoteControl_State.ResumePending=0;
+    RemoteControl_State.SequenceKnown=0;
+    memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
+}
+
+void RemoteControl_Disconnect(void)
+{
+    taskENTER_CRITICAL();
+    RemoteControl_ClearConnection();
+    taskEXIT_CRITICAL();
+}
+
 // Caller holds the task critical section. Expiry is checked before accepting a frame.
 static void RemoteControl_Expire(uint32_t Now)
 {
     if(RemoteControl_State.HasFrame &&
        Now-RemoteControl_State.LastRxTick>=REMOTE_CONTROL_TIMEOUT_MS)
     {
-        RemoteControl_State.HasFrame=0;
-        RemoteControl_State.Armed=0;
-        RemoteControl_State.MotionValid=0;
-        RemoteControl_State.StopPending=1;
-        RemoteControl_State.ResumePending=0;
-        RemoteControl_State.SequenceKnown=0;
-        memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
+        RemoteControl_ClearConnection();
     }
 }
 

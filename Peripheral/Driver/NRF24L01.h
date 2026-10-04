@@ -34,7 +34,7 @@
                         // bit4:中断MAX_RT(达到最大重发次数中断)使能;bit5:中断TX_DS使能;bit6:中断RX_DR使能
 #define EN_AA 0x01      //使能自动应答功能  bit0~5,对应通道0~5
 #define EN_RXADDR 0x02  //接收地址允许,bit0~5,对应通道0~5
-#define SETUP_AW 0x03   //设置地址宽度(所有数据通道):bit1,0:00,3字节;01,4字节;02,5字节;
+#define SETUP_AW 0x03   //设置地址宽度(所有数据通道):bit1,0:00非法;01为3字节;02为4字节;03为5字节;
 #define SETUP_RETR 0x04 //建立自动重发;bit3:0,自动重发计数器;bit7:4,自动重发延时 250*x+86us
 #define RF_CH 0x05      // RF通道,bit6:0,工作通道频率;
 #define RF_SETUP 0x06   // RF寄存器;bit3:传输速率(0:1Mbps,1:2Mbps);bit2:1,发射功率;bit0:低噪声放大器增益
@@ -62,15 +62,30 @@
 #define NRF_FIFO_STATUS 0x17 // FIFO状态寄存器;bit0,RX FIFO寄存器空标志;bit1,RX FIFO满标志;bit2,3,保留
                              // bit4,TX FIFO空标志;bit5,TX FIFO满标志;bit6,1,循环发送上一数据包.0,不循环;
 
-void NRF24L01_SPI_Init(void);
-void NRF24L01_RX_Mode(void);                                              //配置为接收模式
-void NRF24L01_TX_Mode(void);                                              //配置为发送模式
-uint8_t NRF24L01_Write_Buf(uint8_t reg, uint8_t *pBuf, uint8_t uint8_ts); //写数据区
-uint8_t NRF24L01_Read_Buf(uint8_t reg, uint8_t *pBuf, uint8_t uint8_ts);  //读数据区
-uint8_t NRF24L01_Read_Reg(uint8_t reg);                                   //读寄存器
-uint8_t NRF24L01_Write_Reg(uint8_t reg, uint8_t value);                   //写寄存器
-uint8_t NRF24L01_Check(void);                                             //检查24L01是否存在
-uint8_t NRF24L01_TxPacket(uint8_t *txbuf);                                //发送一个包的数据
-uint8_t NRF24L01_RxPacket(uint8_t *rxbuf);                                //接收一个包的数据
+// Results are separate from chip STATUS bits; NRF_OK is zero for both RX and TX.
+typedef enum
+{
+    NRF_OK=0,
+    NRF_EMPTY,
+    NRF_SPI_ERROR,
+    NRF_CONFIG_ERROR,
+    NRF_NOT_READY,
+    NRF_TX_MAX_RETRY,
+    NRF_TX_TIMEOUT,
+    NRF_INVALID_ARGUMENT
+} NRF24L01_Result;
 
-#endif //RM_2026_MINIBOT_NRF24L01_H
+#define NRF_RX_FIFO_DEPTH 3U
+// Single owner: initialize before scheduling, then use only from the communication task.
+// Mode changes discard old FIFOs. Check is read-only; errors require mode reinitialization.
+#define NRF_DYNPD 0x1cU
+#define NRF_FEATURE 0x1dU
+
+void NRF24L01_SPI_Init(void);
+NRF24L01_Result NRF24L01_RX_Mode(void);
+NRF24L01_Result NRF24L01_TX_Mode(void);
+NRF24L01_Result NRF24L01_Check(void);
+NRF24L01_Result NRF24L01_TxPacket(const uint8_t *txbuf);
+NRF24L01_Result NRF24L01_RxPacket(uint8_t *rxbuf);
+
+#endif

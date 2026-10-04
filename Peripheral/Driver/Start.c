@@ -12,9 +12,10 @@ void ALL_Start()
     Encoder_Init();
     Speed_Init();
     MotorControl_Init();
-    NRF24L01_SPI_Init();
-    NRF24L01_RX_Mode();
     RemoteControl_Init();
+    NRF24L01_SPI_Init();
+    // Failure leaves the radio and motors disabled; the communication task retries.
+    (void)NRF24L01_RX_Mode();
 }
 
 void StartDefaultTask(void const *argument)
@@ -59,11 +60,21 @@ void StartCommTask(void const *argument)
     (void)argument;
     for(;;)
     {
-        if(NRF24L01_RxPacket(RxData)==0)
+        NRF24L01_Result Result=NRF_EMPTY;
+        // Hardware FIFO holds three packets. Bound each batch even under continuous RX.
+        for(uint8_t i=0;i<NRF_RX_FIFO_DEPTH;i++)
         {
+            Result=NRF24L01_RxPacket(RxData);
+            if(Result!=NRF_OK)break;
             RemoteControl_Process(RxData, RX_PLOAD_WIDTH);
         }
-        osDelay(5);
+        if(Result!=NRF_OK && Result!=NRF_EMPTY)
+        {
+            RemoteControl_Disconnect();
+            osDelay(100);
+            (void)NRF24L01_RX_Mode();
+        }
+        else osDelay(5);
     }
 }
 

@@ -30,6 +30,8 @@ typedef struct
 _Static_assert(sizeof(RemoteControl_FrameTypeDef)==REMOTE_CONTROL_FRAME_SIZE, "RemoteControl_FrameTypeDef size error");
 
 void RemoteControl_Init(void);
+// Radio fault: latch STOP and require a new zero-speed RESUME after recovery.
+void RemoteControl_Disconnect(void);
 uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length);
 void RemoteControl_Update(float SampleTime);
 uint8_t RemoteControl_IsConnected(void);
