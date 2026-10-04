@@ -7,6 +7,11 @@
 #define REMOTE_CONTROL_TIMEOUT_MS 100U
 #define REMOTE_CONTROL_SPEED_SCALE 1000.0f
 #define REMOTE_CONTROL_FLAG_STOP 0x01U
+#define REMOTE_CONTROL_FLAG_RESUME 0x02U
+// After startup/STOP/timeout: send a zero-speed RESUME frame, then new motion frames.
+// Increment Sequence for each frame (including heartbeat); 255 wraps to 0.
+// RESUME queued before STOP is applied requires a new motion frame after that cycle.
+// Process/Update/status queries are task-context APIs, not ISR APIs.
 
 typedef struct
 {
@@ -28,6 +33,7 @@ void RemoteControl_Init(void);
 uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length);
 void RemoteControl_Update(float SampleTime);
 uint8_t RemoteControl_IsConnected(void);
+uint8_t RemoteControl_IsArmed(void);
 uint32_t RemoteControl_LastTick(void);
 
 #endif

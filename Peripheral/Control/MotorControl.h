@@ -11,6 +11,8 @@
 #define MOTOR_CONTROL_KP 600.0f
 #define MOTOR_CONTROL_KI 80.0f
 #define MOTOR_CONTROL_OUTPUT_MAX 999.0f
+// Initial commissioning limit in wheel-rim m/s; tune after vehicle tests.
+#define MOTOR_CONTROL_TARGET_MAX 0.5f
 
 typedef struct
 {

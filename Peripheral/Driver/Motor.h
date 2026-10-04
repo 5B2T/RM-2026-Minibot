@@ -28,6 +28,8 @@ typedef struct
 extern Motor_HandleTypeDef Motor[4];
 
 void Motor_Init(void);
+void Motor_Enable(void);
+void Motor_Disable(void);
 void Motor_Load(int* Motor_PWM);
 void Motor_Stop(Motor_HandleTypeDef* Motorx);
 

@@ -6,6 +6,7 @@
 #include <math.h>
 
 MotorControl_HandleTypeDef MotorControl[4];
+static uint8_t MotorControl_Enabled;
 
 static float MotorControl_Limit(float Value)
 {
@@ -16,6 +17,7 @@ static float MotorControl_Limit(float Value)
 
 void MotorControl_Init(void)
 {
+    MotorControl_Enabled=0;
     for(uint8_t t=0;t<4;t++)
     {
         MotorControl[t]=(MotorControl_HandleTypeDef){
@@ -31,21 +33,40 @@ void MotorControl_Init(void)
 void MotorControl_SetTarget(float M1_Target, float M2_Target, float M3_Target, float M4_Target)
 {
     float Target[4]={M1_Target, M2_Target, M3_Target, M4_Target};
-
+    float Peak=0;
     for(uint8_t t=0;t<4;t++)
     {
-        MotorControl[t].MotorControl_Target=Target[t];
+        if(!isfinite(Target[t]))
+        {
+            MotorControl_Stop();
+            return;
+        }
+        if(fabsf(Target[t])>Peak)Peak=fabsf(Target[t]);
     }
+    float Scale=Peak>MOTOR_CONTROL_TARGET_MAX ? MOTOR_CONTROL_TARGET_MAX/Peak : 1.0f;
+    for(uint8_t t=0;t<4;t++)
+    {
+        MotorControl[t].MotorControl_Target=Target[t]*Scale;
+    }
+    MotorControl_Enabled=1;
 }
 
 void MotorControl_Update(float SampleTime)
 {
-    if(!isfinite(SampleTime) || SampleTime<=0)
+    if(!MotorControl_Enabled || !isfinite(SampleTime) || SampleTime<=0)
     {
         MotorControl_Stop();
         return;
     }
     int MotorPWM[4];
+    for(uint8_t t=0;t<4;t++)
+    {
+        if(!isfinite(Speed_Get(&Speed[t])))
+        {
+            MotorControl_Stop();
+            return;
+        }
+    }
 
     for(uint8_t t=0;t<4;t++)
     {
@@ -66,10 +87,12 @@ void MotorControl_Update(float SampleTime)
     }
 
     Motor_Load(MotorPWM);
+    Motor_Enable();
 }
 
 void MotorControl_Stop(void)
 {
+    MotorControl_Enabled=0;
     for(uint8_t t=0;t<4;t++)
     {
         MotorControl[t].MotorControl_Target=0;
@@ -77,7 +100,5 @@ void MotorControl_Stop(void)
         MotorControl[t].MotorControl_Out=0;
     }
 
-    int Motor_StopPWM[4]={0,0,0,0};
-
-    Motor_Load(Motor_StopPWM);
+    Motor_Disable();
 }

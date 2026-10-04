@@ -34,9 +34,6 @@ void Motor_Init(void)
         }
     }
 
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_SET);
-
     Motor[0]=(Motor_HandleTypeDef){
         GPIOB,
         GPIO_PIN_0,
@@ -73,6 +70,25 @@ void Motor_Init(void)
     for(uint8_t t=0;t<4;t++)
     {
         Motor_InitOne(&Motor[t]);
+    }
+    Motor_Disable();
+}
+
+void Motor_Enable(void)
+{
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_SET);
+}
+
+void Motor_Disable(void)
+{
+    // STBY low puts both bridges into high impedance; this is not active braking.
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_4, GPIO_PIN_RESET);
+    for(uint8_t t=0;t<4;t++)
+    {
+        Motor[t].Motor_PWM=0;
+        __HAL_TIM_SET_COMPARE(Motor[t].Motor_PWM_TIMx, Motor[t].Motor_PWM_Channel, 0);
     }
 }
 
