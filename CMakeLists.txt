@@ -43,6 +43,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/encoder/bsp_encoder.c
     Bsp/radio/bsp_nrf24l01.c
     Bsp/time/bsp_time.c
+    Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c
     Modules/radio/nrf24l01.c
