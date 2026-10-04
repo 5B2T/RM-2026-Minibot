@@ -2,10 +2,13 @@
 #define COMMAND_PROTOCOL_H
 #include <stdint.h>
 #define REMOTE_CONTROL_FRAME_SIZE 32U
+#define REMOTE_CONTROL_VERSION_WHEELS 0x01U
+#define REMOTE_CONTROL_VERSION_VELOCITY 0x02U
+#define REMOTE_CONTROL_ANGULAR_SCALE 1000.0f
 #define REMOTE_CONTROL_SPEED_SCALE 1000.0f
 #define REMOTE_CONTROL_FLAG_STOP 0x01U
 #define REMOTE_CONTROL_FLAG_RESUME 0x02U
-// Wire layout: A5, 01, sequence, flags, four int16 little-endian mm/s,
+// Wire layout: A5, version, sequence, flags, four little-endian int16 values,
 // 18 reserved bytes, CRC16 (0xffff init, 0xa001 polynomial), little-endian.
 typedef struct
 {
@@ -23,6 +26,9 @@ typedef struct
 
 _Static_assert(sizeof(RemoteControl_FrameTypeDef)==REMOTE_CONTROL_FRAME_SIZE, "RemoteControl_FrameTypeDef size error");
 
+// V1: M1..M4 wheel-rim mm/s in physical channel order.
+// V2: Vx mm/s, Vy mm/s, Wz millirad/s, zero reserved M4.
+// STOP ignores speed fields; RESUME requires all four fields zero in either version.
 // Pure decoder: no HAL, scheduler, command state or motor writes.
 uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
                                RemoteControl_FrameTypeDef *Frame);

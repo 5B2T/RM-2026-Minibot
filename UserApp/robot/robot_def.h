@@ -17,11 +17,24 @@ typedef struct
     uint8_t Enabled;
 } Robot_WheelCommand;
 
+typedef enum {ROBOT_COMMAND_WHEELS=0,ROBOT_COMMAND_VELOCITY=1} Robot_CommandMode;
+typedef struct
+{
+    Robot_CommandMode Mode;
+    uint8_t Enabled;
+    union
+    {
+        float Wheels[ROBOT_WHEEL_COUNT]; // Physical M1..M4 order.
+        Robot_ChassisVelocity Velocity; // Body axes, m/s and rad/s.
+    } Target;
+} Robot_ChassisCommand;
+
 typedef struct
 {
     float MeasuredSpeed[ROBOT_WHEEL_COUNT];
     float TargetSpeed[ROBOT_WHEEL_COUNT];
     float PWM[ROBOT_WHEEL_COUNT]; // Forward-positive control output before motor polarity, +/-999.
+    Robot_CommandMode CommandMode; // Last active command type.
     uint32_t TickMs;
     uint8_t Connected;
     uint8_t Armed; // Command link authorizes motion; independent of actual driver enable.

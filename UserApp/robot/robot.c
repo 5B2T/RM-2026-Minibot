@@ -37,7 +37,7 @@ void Robot_ControlReset(void)
 void Robot_ControlStep(float DtS)
 {
     if(!Ready) {BSP_Motor_Disable();return;}
-    Robot_WheelCommand Command;
+    Robot_ChassisCommand Command;
     if(!Chassis_Measure(DtS))Chassis_Stop();
     else
     {

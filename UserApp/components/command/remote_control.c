@@ -8,6 +8,7 @@
 typedef struct
 {
     float Target[4];
+    Robot_CommandMode Mode;
     uint32_t LastRxTick;
     uint8_t HasFrame;
     uint8_t Armed;
@@ -29,6 +30,7 @@ static void RemoteControl_ClearConnection(void)
     RemoteControl_State.StopPending=1;
     RemoteControl_State.ResumePending=0;
     RemoteControl_State.SequenceKnown=0;
+    RemoteControl_State.Mode=ROBOT_COMMAND_WHEELS;
     memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
 }
 
@@ -69,6 +71,8 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
                      (float)Frame.M3/REMOTE_CONTROL_SPEED_SCALE,
                      (float)Frame.M4/REMOTE_CONTROL_SPEED_SCALE};
 
+    if(Frame.Version==REMOTE_CONTROL_VERSION_VELOCITY)Target[2]=(float)Frame.M3/REMOTE_CONTROL_ANGULAR_SCALE;
+
     taskENTER_CRITICAL();
     uint32_t Now=BSP_TimeMs();
     RemoteControl_Expire(Now);
@@ -105,6 +109,8 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     }
     else if(RemoteControl_State.Armed)
     {
+        RemoteControl_State.Mode=Frame.Version==REMOTE_CONTROL_VERSION_VELOCITY?
+                                  ROBOT_COMMAND_VELOCITY:ROBOT_COMMAND_WHEELS;
         memcpy(RemoteControl_State.Target, Target, sizeof(Target));
         RemoteControl_State.MotionValid=1;
     }
@@ -112,7 +118,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     return 1;
 }
 
-void RemoteControl_GetCommand(Robot_WheelCommand *Command)
+void RemoteControl_GetCommand(Robot_ChassisCommand *Command)
 {
     if(Command==NULL)return;
     uint8_t Run;
@@ -133,7 +139,12 @@ void RemoteControl_GetCommand(Robot_WheelCommand *Command)
         Run=RemoteControl_State.HasFrame && RemoteControl_State.Armed &&
             RemoteControl_State.MotionValid;
     }
-    memcpy(Command->WheelSpeed, RemoteControl_State.Target, sizeof(Command->WheelSpeed));
+    Command->Mode=RemoteControl_State.Mode;
+    if(Command->Mode==ROBOT_COMMAND_VELOCITY)
+        Command->Target.Velocity=(Robot_ChassisVelocity){RemoteControl_State.Target[0],
+                                                        RemoteControl_State.Target[1],
+                                                        RemoteControl_State.Target[2]};
+    else memcpy(Command->Target.Wheels, RemoteControl_State.Target, sizeof(Command->Target.Wheels));
     Command->Enabled=Run;
     taskEXIT_CRITICAL();
 }

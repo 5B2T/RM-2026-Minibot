@@ -25,7 +25,8 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
                                RemoteControl_FrameTypeDef *Frame)
 {
     if(Data==NULL || Frame==NULL || Length!=REMOTE_CONTROL_FRAME_SIZE)return 0;
-    if(Data[0]!=0xa5U || Data[1]!=0x01U)return 0;
+    if(Data[0]!=0xa5U || (Data[1]!=REMOTE_CONTROL_VERSION_WHEELS &&
+                         Data[1]!=REMOTE_CONTROL_VERSION_VELOCITY))return 0;
     if(Data[3]&~(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME))return 0;
     if(CRC16(Data, REMOTE_CONTROL_FRAME_SIZE-2U)!=ReadU16(Data+30))return 0;
     RemoteControl_FrameTypeDef Decoded={
@@ -36,6 +37,8 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
     if(!(Decoded.Flags&REMOTE_CONTROL_FLAG_STOP) &&
        (Decoded.Flags&REMOTE_CONTROL_FLAG_RESUME) &&
        (Decoded.M1 || Decoded.M2 || Decoded.M3 || Decoded.M4))return 0;
+    if(!(Decoded.Flags&REMOTE_CONTROL_FLAG_STOP) &&
+       Decoded.Version==REMOTE_CONTROL_VERSION_VELOCITY && Decoded.M4!=0)return 0;
     *Frame=Decoded;
     return 1;
 }
