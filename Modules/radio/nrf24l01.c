@@ -1,33 +1,18 @@
-#include "NRF24L01.h"
-#include "spi.h"
-#include "FreeRTOS.h"
-#include "task.h"
-#include "cmsis_os.h"
+#include "radio/nrf24l01.h"
+#include "radio/nrf24l01_registers.h"
+#include "radio/bsp_nrf24l01.h"
+#include "time/bsp_time.h"
 #include <string.h>
-
-#define CE_LOW HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET)
-#define CE_HIGH HAL_GPIO_WritePin(GPIOC, GPIO_PIN_5, GPIO_PIN_SET)
-#define CS_LOW HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_RESET)
-#define CS_HIGH HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET)
-#define NRF_SPI_TIMEOUT_MS 2U
 #define NRF_TX_TIMEOUT_MS 80U
 
 static const uint8_t Address[RX_ADR_WIDTH]={0xb0,0x43,0x10,0x10,0x01};
 static uint8_t Ready;
 static uint8_t ReceiveMode;
 
-static void WaitMs(uint32_t Ms)
-{
-    // Runtime waits yield the CPU so motor control can continue.
-    // One extra tick avoids a short wait when called just before a tick boundary.
-    if(xTaskGetSchedulerState()==taskSCHEDULER_RUNNING)osDelay(Ms+1U);
-    else HAL_Delay(Ms);
-}
-
 static NRF24L01_Result Fault(NRF24L01_Result Result)
 {
     Ready=0;
-    CE_LOW;
+    BSP_NRF24L01_SetCE(0);
     return Result;
 }
 
@@ -40,11 +25,7 @@ static NRF24L01_Result Transfer(uint8_t Command, const uint8_t *Write,
     memset(Tx, NOP, sizeof(Tx));
     Tx[0]=Command;
     if(Write)memcpy(Tx+1, Write, Length);
-    CS_LOW;
-    HAL_StatusTypeDef Status=HAL_SPI_TransmitReceive(&hspi2, Tx, Rx,
-                                                   Length+1U, NRF_SPI_TIMEOUT_MS);
-    CS_HIGH;
-    if(Status!=HAL_OK)return Fault(NRF_SPI_ERROR);
+    if(!BSP_NRF24L01_Transfer(Tx, Rx, Length+1U))return Fault(NRF_SPI_ERROR);
     // STATUS bit 7 is reserved zero: floating MISO/all-ones is not a valid chip reply.
     if(Rx[0]&0x80U)return Fault(NRF_CONFIG_ERROR);
     if(Read)memcpy(Read, Rx+1, Length);
@@ -64,10 +45,10 @@ static NRF24L01_Result ReadReg(uint8_t Reg, uint8_t *Value)
 void NRF24L01_SPI_Init(void)
 {
     Ready=0;
-    CE_LOW;
-    CS_HIGH;
+    BSP_NRF24L01_SetCE(0);
+    BSP_NRF24L01_Init();
     // POR maximum 10.3 ms after VDD >= 1.9 V (Nordic specification v2.0).
-    WaitMs(11);
+    BSP_WaitMs(11);
 }
 
 static NRF24L01_Result VerifyConfig(void)
@@ -105,7 +86,7 @@ static NRF24L01_Result Configure(uint8_t RxMode)
 {
     Ready=0;
     ReceiveMode=RxMode;
-    CE_LOW;
+    BSP_NRF24L01_SetCE(0);
     // Configure while powered down, then explicitly wait for oscillator start-up.
     const uint8_t Regs[]={CONFIG,EN_AA,EN_RXADDR,SETUP_AW,SETUP_RETR,
                           RF_CH,RF_SETUP,RX_PW_P0,NRF_DYNPD,NRF_FEATURE};
@@ -128,13 +109,13 @@ static NRF24L01_Result Configure(uint8_t RxMode)
     if(Result!=NRF_OK)return Result;
     Result=WriteReg(CONFIG, RxMode?0x0f:0x0e);
     if(Result!=NRF_OK)return Result;
-    WaitMs(2); // PWR_UP to standby: maximum 1.5 ms.
+    BSP_WaitMs(2); // PWR_UP to standby: maximum 1.5 ms.
     Result=VerifyConfig();
     if(Result!=NRF_OK)return Result;
     if(RxMode)
     {
-        CE_HIGH;
-        WaitMs(1); // RX settling: 130 us; API returns only after RX is ready.
+        BSP_NRF24L01_SetCE(1);
+        BSP_WaitMs(1); // RX settling: 130 us; API returns only after RX is ready.
     }
     Ready=1;
     return NRF_OK;
@@ -169,15 +150,15 @@ NRF24L01_Result NRF24L01_TxPacket(const uint8_t *TxBuf)
 {
     if(!TxBuf)return NRF_INVALID_ARGUMENT;
     if(!Ready || ReceiveMode)return NRF_NOT_READY;
-    CE_LOW;
+    BSP_NRF24L01_SetCE(0);
     NRF24L01_Result Result=WriteReg(STATUS, TX_OK|MAX_TX);
     if(Result!=NRF_OK)return Result;
     Result=Transfer(WR_TX_PLOAD, TxBuf, 0, TX_PLOAD_WIDTH);
     if(Result!=NRF_OK)return Result;
-    uint32_t Started=HAL_GetTick();
-    CE_HIGH;
-    WaitMs(1); // CE pulse >= 10 us; wait yields when scheduler is running.
-    CE_LOW;
+    uint32_t Started=BSP_TimeMs();
+    BSP_NRF24L01_SetCE(1);
+    BSP_WaitMs(1); // CE pulse >= 10 us; wait yields when scheduler is running.
+    BSP_NRF24L01_SetCE(0);
     // Poll STATUS rather than waiting forever for an IRQ pin transition.
     for(uint32_t Poll=0;Poll<NRF_TX_TIMEOUT_MS;Poll++)
     {
@@ -195,8 +176,8 @@ NRF24L01_Result NRF24L01_TxPacket(const uint8_t *TxBuf)
             }
             return NRF_OK;
         }
-        if(HAL_GetTick()-Started>=NRF_TX_TIMEOUT_MS)break;
-        WaitMs(1);
+        if(BSP_TimeMs()-Started>=NRF_TX_TIMEOUT_MS)break;
+        BSP_WaitMs(1);
     }
     Result=Transfer(FLUSH_TX, 0, 0, 0);
     return Result==NRF_OK?Fault(NRF_TX_TIMEOUT):Result;

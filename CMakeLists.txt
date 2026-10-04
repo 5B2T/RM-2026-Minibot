@@ -32,47 +32,28 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 enable_language(C ASM)
 
 # Create an executable object type
-add_executable(${CMAKE_PROJECT_NAME}
-        Peripheral/Driver/Start.c
-        Peripheral/Driver/Start.h
-        Peripheral/Driver/Motor.c
-        Peripheral/Driver/Motor.h
-        Peripheral/Driver/Encoder.c
-        Peripheral/Driver/Encoder.h
-        Peripheral/Control/Speed.c
-        Peripheral/Control/Speed.h
-        Peripheral/Control/MotorControl.c
-        Peripheral/Control/MotorControl.h
-        Peripheral/Control/RemoteControl.c
-        Peripheral/Control/RemoteControl.h
-        Peripheral/Driver/NRF24L01.c
-        Peripheral/Driver/NRF24L01.h
-        Peripheral/Control/test.c
-        Peripheral/Control/test.h
-)
+add_executable(${CMAKE_PROJECT_NAME})
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
-# Link directories setup
-target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined library search paths
-)
-
-# Add sources to executable
+# Application layers; hardware-generated files remain owned by CubeMX.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    Bsp/motor/bsp_motor.c
+    Bsp/encoder/bsp_encoder.c
+    Bsp/radio/bsp_nrf24l01.c
+    Bsp/time/bsp_time.c
+    Modules/algorithm/pi_controller.c
+    Modules/command/command_protocol.c
+    Modules/radio/nrf24l01.c
+    Modules/wheel/speed.c
+    Modules/wheel/motor_control.c
+    UserApp/components/chassis/chassis.c
+    UserApp/components/command/remote_control.c
+    UserApp/robot/robot.c
+    UserApp/os_task.c
 )
-
-# Add include paths
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
-)
-
-# Add project symbols (macros)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
-)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE Bsp Modules UserApp)
 
 # Remove wrong libob.a library dependency when using cpp files
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)

@@ -1,25 +1,6 @@
-//
-// Created by Admin on 2026/10/3.
-//
-
-#ifndef RM_2026_MINIBOT_NRF24L01_H
-#define RM_2026_MINIBOT_NRF24L01_H
-
-/*
- * NRF24L01.h
- *
- *  Created on: Mar 5, 2022
- *      Author: LX
- */
-
-#include "main.h"
-
-// NRF24L01发送接收数据宽度定义
-#define TX_ADR_WIDTH 5    // 5字节的地址宽度
-#define RX_ADR_WIDTH 5    // 5字节的地址宽度
-#define TX_PLOAD_WIDTH 32 // 32字节的用户数据宽度
-#define RX_PLOAD_WIDTH 32 // 32字节的用户数据宽度
-
+#ifndef NRF24L01_REGISTERS_H
+#define NRF24L01_REGISTERS_H
+// Internal device register/command definitions, not application APIs.
 // NRF24L01寄存器操作命令
 #define NRF_READ_REG 0x00  //读配置寄存器,低5位为寄存器地址
 #define NRF_WRITE_REG 0x20 //写配置寄存器,低5位为寄存器地址
@@ -62,30 +43,8 @@
 #define NRF_FIFO_STATUS 0x17 // FIFO状态寄存器;bit0,RX FIFO寄存器空标志;bit1,RX FIFO满标志;bit2,3,保留
                              // bit4,TX FIFO空标志;bit5,TX FIFO满标志;bit6,1,循环发送上一数据包.0,不循环;
 
-// Results are separate from chip STATUS bits; NRF_OK is zero for both RX and TX.
-typedef enum
-{
-    NRF_OK=0,
-    NRF_EMPTY,
-    NRF_SPI_ERROR,
-    NRF_CONFIG_ERROR,
-    NRF_NOT_READY,
-    NRF_TX_MAX_RETRY,
-    NRF_TX_TIMEOUT,
-    NRF_INVALID_ARGUMENT
-} NRF24L01_Result;
 
-#define NRF_RX_FIFO_DEPTH 3U
-// Single owner: initialize before scheduling, then use only from the communication task.
-// Mode changes discard old FIFOs. Check is read-only; errors require mode reinitialization.
 #define NRF_DYNPD 0x1cU
 #define NRF_FEATURE 0x1dU
-
-void NRF24L01_SPI_Init(void);
-NRF24L01_Result NRF24L01_RX_Mode(void);
-NRF24L01_Result NRF24L01_TX_Mode(void);
-NRF24L01_Result NRF24L01_Check(void);
-NRF24L01_Result NRF24L01_TxPacket(const uint8_t *txbuf);
-NRF24L01_Result NRF24L01_RxPacket(uint8_t *rxbuf);
 
 #endif

@@ -1,0 +1,41 @@
+#include "command/command_protocol.h"
+#include <stddef.h>
+#include <string.h>
+static uint16_t ReadU16(const uint8_t *Data)
+{
+    return (uint16_t)Data[0]|((uint16_t)Data[1]<<8);
+}
+static int16_t ReadI16(const uint8_t *Data)
+{
+    int32_t Value=ReadU16(Data);
+    if(Value>=0x8000L)Value-=0x10000L;
+    return (int16_t)Value;
+}
+static uint16_t CRC16(const uint8_t *Data, uint8_t Length)
+{
+    uint16_t CRC=0xffffU;
+    for(uint8_t i=0;i<Length;i++)
+    {
+        CRC^=Data[i];
+        for(uint8_t Bit=0;Bit<8;Bit++)CRC=(CRC&1U)?(CRC>>1)^0xa001U:CRC>>1;
+    }
+    return CRC;
+}
+uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
+                               RemoteControl_FrameTypeDef *Frame)
+{
+    if(Data==NULL || Frame==NULL || Length!=REMOTE_CONTROL_FRAME_SIZE)return 0;
+    if(Data[0]!=0xa5U || Data[1]!=0x01U)return 0;
+    if(Data[3]&~(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME))return 0;
+    if(CRC16(Data, REMOTE_CONTROL_FRAME_SIZE-2U)!=ReadU16(Data+30))return 0;
+    RemoteControl_FrameTypeDef Decoded={
+        .Header=Data[0],.Version=Data[1],.Sequence=Data[2],.Flags=Data[3],
+        .M1=ReadI16(Data+4),.M2=ReadI16(Data+6),
+        .M3=ReadI16(Data+8),.M4=ReadI16(Data+10),.Frame_CRC=ReadU16(Data+30)};
+    memcpy(Decoded.Reserved, Data+12, sizeof(Decoded.Reserved));
+    if(!(Decoded.Flags&REMOTE_CONTROL_FLAG_STOP) &&
+       (Decoded.Flags&REMOTE_CONTROL_FLAG_RESUME) &&
+       (Decoded.M1 || Decoded.M2 || Decoded.M3 || Decoded.M4))return 0;
+    *Frame=Decoded;
+    return 1;
+}

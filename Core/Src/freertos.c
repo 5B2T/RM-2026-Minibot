@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "os_task.h"
 
 /* USER CODE END Includes */
 
@@ -51,9 +52,6 @@ osThreadId defaultTaskHandle;
 osThreadId MotorTastHandle;
 osThreadId CommTaskHandle;
 osThreadId ArmOledTaskHandle;
-osMessageQId qMotorCmdHandle;
-osMessageQId qArmCmdHandle;
-osMessageQId qSensorDtaHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -104,19 +102,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
-
-  /* Create the queue(s) */
-  /* definition and creation of qMotorCmd */
-  osMessageQDef(qMotorCmd, 16, uint16_t);
-  qMotorCmdHandle = osMessageCreate(osMessageQ(qMotorCmd), NULL);
-
-  /* definition and creation of qArmCmd */
-  osMessageQDef(qArmCmd, 16, uint16_t);
-  qArmCmdHandle = osMessageCreate(osMessageQ(qArmCmd), NULL);
-
-  /* definition and creation of qSensorDta */
-  osMessageQDef(qSensorDta, 16, uint16_t);
-  qSensorDtaHandle = osMessageCreate(osMessageQ(qSensorDta), NULL);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -212,7 +197,7 @@ __weak void StartArmOledTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(10);
   }
   /* USER CODE END StartArmOledTask */
 }

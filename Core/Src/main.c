@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "../../Peripheral/Driver/Start.h"
 #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
@@ -29,6 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "robot/robot.h"
 
 /* USER CODE END Includes */
 
@@ -109,7 +109,7 @@ int main(void)
   MX_TIM11_Init();
   /* USER CODE BEGIN 2 */
 
-  ALL_Start();
+  if(!Robot_Init())Error_Handler();
 
   /* USER CODE END 2 */
 
