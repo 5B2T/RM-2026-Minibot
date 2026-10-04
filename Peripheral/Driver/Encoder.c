@@ -38,20 +38,23 @@ void Encoder_Init(void)
     HAL_TIM_Encoder_Start(Encoder4.Encoder_TIMx, TIM_CHANNEL_ALL);
 }
 
-int16_t Encoder_GetCount(Encoder_HandleTypeDef* Encoderx)
+uint16_t Encoder_GetCount(Encoder_HandleTypeDef* Encoderx)
 {
-    return (int16_t)__HAL_TIM_GET_COUNTER(Encoderx->Encoder_TIMx);
+    return (uint16_t)__HAL_TIM_GET_COUNTER(Encoderx->Encoder_TIMx);
 }
 
 int16_t Encoder_GetDelta(Encoder_HandleTypeDef* Encoderx)
 {
-    int16_t Count=Encoder_GetCount(Encoderx); 
-    int16_t Delta=Count-Encoderx->Encoder_LastCount;
+    uint16_t Count=Encoder_GetCount(Encoderx);
+    uint16_t RawDelta=(uint16_t)(Count-Encoderx->Encoder_LastCount);
+    int32_t Delta=RawDelta;
+    // All four timers use ARR=65535. Motion must be less than 32768 counts/sample.
+    if(RawDelta>=0x8000U)Delta-=0x10000L;
 
     Encoderx->Encoder_LastCount = Count;
-    Encoderx->Encoder_Delta = Delta;
+    Encoderx->Encoder_Delta = (int16_t)Delta;
 
-    return Delta;
+    return Encoderx->Encoder_Delta;
 }
 
 void Encoder_Reset(Encoder_HandleTypeDef* Encoderx)

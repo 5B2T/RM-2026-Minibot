@@ -3,6 +3,7 @@
 //
 
 #include "MotorControl.h"
+#include <math.h>
 
 MotorControl_HandleTypeDef MotorControl[4];
 
@@ -37,14 +38,19 @@ void MotorControl_SetTarget(float M1_Target, float M2_Target, float M3_Target, f
     }
 }
 
-void MotorControl_Update(void)
+void MotorControl_Update(float SampleTime)
 {
+    if(!isfinite(SampleTime) || SampleTime<=0)
+    {
+        MotorControl_Stop();
+        return;
+    }
     int MotorPWM[4];
 
     for(uint8_t t=0;t<4;t++)
     {
         float Err=MotorControl[t].MotorControl_Target-Speed_Get(&Speed[t]);
-        float I=MotorControl[t].MotorControl_I+Err*MOTOR_CONTROL_SAMPLE_TIME;
+        float I=MotorControl[t].MotorControl_I+Err*SampleTime;
         float Output=MotorControl[t].MotorControl_Kp*Err+MotorControl[t].MotorControl_Ki*I;
 
         Output=MotorControl_Limit(Output);

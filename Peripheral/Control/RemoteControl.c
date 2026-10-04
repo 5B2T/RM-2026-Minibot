@@ -62,7 +62,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     return 1;
 }
 
-void RemoteControl_Update(void)
+void RemoteControl_Update(float SampleTime)
 {
     if(!RemoteControl_Connected || HAL_GetTick()-RemoteControl_LastRxTick>REMOTE_CONTROL_TIMEOUT_MS)
     {
@@ -73,7 +73,7 @@ void RemoteControl_Update(void)
 
     MotorControl_SetTarget(RemoteControl_Target[0], RemoteControl_Target[1],
                            RemoteControl_Target[2], RemoteControl_Target[3]);
-    MotorControl_Update();
+    MotorControl_Update(SampleTime);
 }
 
 uint8_t RemoteControl_IsConnected(void)

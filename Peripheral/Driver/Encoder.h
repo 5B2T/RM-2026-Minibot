@@ -12,7 +12,7 @@
 typedef struct
 {
     TIM_HandleTypeDef* Encoder_TIMx;
-    int16_t Encoder_LastCount;
+    uint16_t Encoder_LastCount;
     int16_t Encoder_Delta;
 }Encoder_HandleTypeDef;
 
@@ -22,7 +22,7 @@ extern Encoder_HandleTypeDef Encoder3;
 extern Encoder_HandleTypeDef Encoder4;
 
 void Encoder_Init(void);
-int16_t Encoder_GetCount(Encoder_HandleTypeDef* Encoderx);
+uint16_t Encoder_GetCount(Encoder_HandleTypeDef* Encoderx);
 int16_t Encoder_GetDelta(Encoder_HandleTypeDef* Encoderx);
 void Encoder_Reset(Encoder_HandleTypeDef* Encoderx);
 

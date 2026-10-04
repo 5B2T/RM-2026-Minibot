@@ -31,7 +31,7 @@ uint8_t Test_Encoder(void)
 
 uint8_t Test_Speed(void)
 {
-    Speed_Update();
+    if(!Speed_Update(SPEED_SAMPLE_TIME))return 0;
     for(uint8_t t=0;t<4;t++)
     {
         if(Speed[t].Speed_Encoderx == 0)return 0;
@@ -42,7 +42,7 @@ uint8_t Test_Speed(void)
 uint8_t Test_MotorControl(void)
 {
     MotorControl_SetTarget(0, 0, 0, 0);
-    MotorControl_Update();
+    MotorControl_Update(SPEED_SAMPLE_TIME);
     for(uint8_t t=0;t<4;t++)
     {
         if(MotorControl[t].MotorControl_Target != 0)return 0;

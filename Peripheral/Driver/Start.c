@@ -3,6 +3,8 @@
 //
 
 #include "Start.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 void ALL_Start()
 {
@@ -27,10 +29,26 @@ void StartDefaultTask(void const *argument)
 void StartMotorTast(void const *argument)
 {
     (void)argument;
+    const TickType_t Period=pdMS_TO_TICKS(SPEED_SAMPLE_PERIOD_MS);
+    TickType_t LastWakeTime=xTaskGetTickCount();
+    Speed_Reset();
+    uint32_t LastSampleTick=HAL_GetTick();
     for(;;)
     {
-        RemoteControl_Update();
-        osDelay(10);
+        vTaskDelayUntil(&LastWakeTime, Period);
+        TickType_t Now=xTaskGetTickCount();
+        // Skip missed scheduling slots instead of running a burst of catch-up cycles.
+        if((TickType_t)(Now-LastWakeTime)>=Period)LastWakeTime=Now;
+
+        uint32_t SampleTick=HAL_GetTick();
+        uint32_t ElapsedMs=SampleTick-LastSampleTick;
+        if(ElapsedMs==0)continue;
+        float SampleTime=(float)ElapsedMs/1000.0f;
+        if(Speed_Update(SampleTime))
+        {
+            LastSampleTick=SampleTick;
+            RemoteControl_Update(SampleTime);
+        }
     }
 }
 
