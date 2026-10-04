@@ -34,3 +34,9 @@ void StartCommTask(void const *Argument)
     (void)Argument;
     for(;;)osDelay(Robot_CommunicationStep());
 }
+
+void StartArmOledTask(void const *Argument)
+{
+    (void)Argument;
+    for(;;)osDelay(Robot_DisplayStep());
+}

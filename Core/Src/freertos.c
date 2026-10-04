@@ -121,7 +121,7 @@ void MX_FREERTOS_Init(void) {
   CommTaskHandle = osThreadCreate(osThread(CommTask), NULL);
 
   /* definition and creation of ArmOledTask */
-  osThreadDef(ArmOledTask, StartArmOledTask, osPriorityNormal, 0, 256);
+  osThreadDef(ArmOledTask, StartArmOledTask, osPriorityNormal, 0, 384);
   ArmOledTaskHandle = osThreadCreate(osThread(ArmOledTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */

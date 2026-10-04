@@ -29,4 +29,11 @@
 // +1 preserves original software polarity, which has NOT been checked on hardware.
 #define ROBOT_MOTOR_POLARITY {1,1,1,1}
 #define ROBOT_ENCODER_POLARITY {1,1,1,1}
+// SSD1306 four-pin module, seven-bit address. No external reset GPIO.
+#define ROBOT_OLED_ADDRESS 0x3cU
+#define ROBOT_DISPLAY_POWER_WAIT_MS 200U
+#define ROBOT_DISPLAY_POLL_MS 5U
+#define ROBOT_DISPLAY_REFRESH_MS 500U
+#define ROBOT_DISPLAY_PAGE_MS 5000U
+#define ROBOT_DISPLAY_RETRY_MS 1000U
 #endif

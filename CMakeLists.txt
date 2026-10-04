@@ -43,6 +43,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/encoder/bsp_encoder.c
     Bsp/radio/bsp_nrf24l01.c
     Bsp/time/bsp_time.c
+    Bsp/i2c/bsp_i2c.c
+    Modules/display/oled.c
     Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c
@@ -51,6 +53,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Modules/wheel/motor_control.c
     UserApp/components/chassis/chassis.c
     UserApp/components/command/remote_control.c
+    UserApp/components/display/debug_display.c
     UserApp/robot/robot.c
     UserApp/os_task.c
 )

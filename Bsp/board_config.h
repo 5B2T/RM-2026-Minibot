@@ -23,4 +23,10 @@
 #define BOARD_RADIO_SPI hspi2
 #define BOARD_RADIO_SPI_TIMEOUT_MS 2U
 
+// Shared OLED / future sensor bus: I2C1, PB6 SCL / PB7 SDA, 100 kHz.
+#define BOARD_DEVICE_I2C hi2c1
+#define BOARD_I2C_MAX_WRITE_SIZE 33U
+#define BOARD_I2C_LOCK_TIMEOUT_MS 5U
+#define BOARD_I2C_WRITE_TIMEOUT_MS 10U
+
 #endif
