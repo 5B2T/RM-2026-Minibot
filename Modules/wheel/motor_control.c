@@ -3,11 +3,15 @@
 #include "algorithm/pi_controller.h"
 #include "motor/bsp_motor.h"
 #include <math.h>
+#include <stddef.h>
+#include <string.h>
 static MotorControl_HandleTypeDef MotorControl[WHEEL_COUNT];
 static PI_Controller Controllers[WHEEL_COUNT];
 static float TargetLimit;
 static uint8_t Enabled;
 static uint8_t Initialized;
+static int8_t MotorPolarity[WHEEL_COUNT];
+static int8_t EncoderPolarity[WHEEL_COUNT];
 _Static_assert(WHEEL_COUNT==BSP_MOTOR_COUNT, "Motor mapping must match wheel count");
 
 uint8_t MotorControl_Init(float Kp, float Ki, float OutputLimit, float TargetLimitMps)
@@ -20,11 +24,26 @@ uint8_t MotorControl_Init(float Kp, float Ki, float OutputLimit, float TargetLim
     TargetLimit=TargetLimitMps;
     for(uint8_t i=0;i<WHEEL_COUNT;i++)
     {
+        MotorPolarity[i]=EncoderPolarity[i]=1;
         Controllers[i]=(PI_Controller){Kp,Ki,0,OutputLimit};
         MotorControl[i]=(MotorControl_HandleTypeDef){.MotorControl_Kp=Kp,.MotorControl_Ki=Ki};
     }
     Initialized=1;
     return 1;
+}
+uint8_t MotorControl_SetPolarity(const int8_t MotorSign[4], const int8_t EncoderSign[4])
+{
+    if(!Initialized || Enabled || MotorSign==NULL || EncoderSign==NULL)return 0;
+    for(uint8_t i=0;i<WHEEL_COUNT;i++)
+        if((MotorSign[i]!=1 && MotorSign[i]!=-1) ||
+           (EncoderSign[i]!=1 && EncoderSign[i]!=-1))return 0;
+    memcpy(MotorPolarity, MotorSign, sizeof(MotorPolarity));
+    memcpy(EncoderPolarity, EncoderSign, sizeof(EncoderPolarity));
+    return 1;
+}
+float MotorControl_GetMeasuredSpeed(uint8_t Wheel)
+{
+    return Wheel<WHEEL_COUNT?Speed_Get(Wheel)*EncoderPolarity[Wheel]:0;
 }
 void MotorControl_SetTarget(float M1, float M2, float M3, float M4)
 {
@@ -45,17 +64,17 @@ void MotorControl_Update(float SampleTime)
     if(!Enabled || !isfinite(SampleTime) || SampleTime<=0)
     {MotorControl_Stop();return;}
     for(uint8_t i=0;i<WHEEL_COUNT;i++)
-        if(!isfinite(Speed_Get(i))) {MotorControl_Stop();return;}
+        if(!isfinite(MotorControl_GetMeasuredSpeed(i))) {MotorControl_Stop();return;}
     int PWM[WHEEL_COUNT];
     for(uint8_t i=0;i<WHEEL_COUNT;i++)
     {
-        float Error=MotorControl[i].MotorControl_Target-Speed_Get(i);
+        float Error=MotorControl[i].MotorControl_Target-MotorControl_GetMeasuredSpeed(i);
         float Output=PI_Update(&Controllers[i], Error, SampleTime);
         if(!isfinite(Output) || !isfinite(Controllers[i].Integral))
         {MotorControl_Stop();return;}
         MotorControl[i].MotorControl_I=Controllers[i].Integral;
         MotorControl[i].MotorControl_Out=Output;
-        PWM[i]=(int)Output;
+        PWM[i]=(int)Output*MotorPolarity[i];
     }
     BSP_Motor_Load(PWM);
     BSP_Motor_Enable();

@@ -12,6 +12,9 @@ typedef struct
 }MotorControl_HandleTypeDef;
 
 uint8_t MotorControl_Init(float Kp, float Ki, float OutputLimit, float TargetLimitMps);
+// Set signs only while disabled; rejects invalid signs without partial updates.
+uint8_t MotorControl_SetPolarity(const int8_t MotorSign[4], const int8_t EncoderSign[4]);
+float MotorControl_GetMeasuredSpeed(uint8_t Wheel); // Forward-positive m/s.
 void MotorControl_SetTarget(float M1_Target, float M2_Target, float M3_Target, float M4_Target);
 void MotorControl_Update(float SampleTime);
 void MotorControl_Stop(void);

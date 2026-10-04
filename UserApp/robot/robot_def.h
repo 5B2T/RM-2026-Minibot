@@ -2,7 +2,15 @@
 #define ROBOT_DEF_H
 #include <stdint.h>
 #define ROBOT_WHEEL_COUNT 4U
-// M1..M4 retain the original physical channel order. Wheel speed is rim m/s.
+// Canonical wheel position order; actual physical channels are configured separately.
+typedef enum {ROBOT_WHEEL_FL=0,ROBOT_WHEEL_FR,ROBOT_WHEEL_RL,ROBOT_WHEEL_RR} Robot_WheelPosition;
+typedef struct
+{
+    float Vx; // m/s, forward positive.
+    float Vy; // m/s, left positive.
+    float Wz; // rad/s, counterclockwise positive viewed from above.
+} Robot_ChassisVelocity;
+// M1..M4 retain physical channel order. Rim m/s, forward positive after calibration.
 typedef struct
 {
     float WheelSpeed[ROBOT_WHEEL_COUNT];
@@ -13,7 +21,7 @@ typedef struct
 {
     float MeasuredSpeed[ROBOT_WHEEL_COUNT];
     float TargetSpeed[ROBOT_WHEEL_COUNT];
-    float PWM[ROBOT_WHEEL_COUNT]; // Signed control output, +/-999.
+    float PWM[ROBOT_WHEEL_COUNT]; // Forward-positive control output before motor polarity, +/-999.
     uint32_t TickMs;
     uint8_t Connected;
     uint8_t Armed; // Command link authorizes motion; independent of actual driver enable.
