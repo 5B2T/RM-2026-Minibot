@@ -32,4 +32,7 @@ _Static_assert(sizeof(RemoteControl_FrameTypeDef)==REMOTE_CONTROL_FRAME_SIZE, "R
 // Pure decoder: no HAL, scheduler, command state or motor writes.
 uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
                                RemoteControl_FrameTypeDef *Frame);
+// Explicit wire encoding; rejects invalid commands and leaves Output unchanged on failure.
+uint8_t CommandProtocol_Encode(const RemoteControl_FrameTypeDef *Frame,
+                               uint8_t Output[REMOTE_CONTROL_FRAME_SIZE]);
 #endif

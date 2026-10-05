@@ -16,7 +16,8 @@ typedef enum
     NRF_NOT_READY,
     NRF_TX_MAX_RETRY,
     NRF_TX_TIMEOUT,
-    NRF_INVALID_ARGUMENT
+    NRF_INVALID_ARGUMENT,
+    NRF_PENDING
 } NRF24L01_Result;
 
 #define NRF_RX_FIFO_DEPTH 3U
@@ -28,5 +29,10 @@ NRF24L01_Result NRF24L01_TX_Mode(void);
 NRF24L01_Result NRF24L01_Check(void);
 NRF24L01_Result NRF24L01_TxPacket(const uint8_t *txbuf);
 NRF24L01_Result NRF24L01_RxPacket(uint8_t *rxbuf);
+// Cooperative TX for the remote. Call Poll frequently; no conversion/retry busy-wait.
+// Abort powers down the radio before discarding a pending packet, then restores standby.
+NRF24L01_Result NRF24L01_TxBegin(const uint8_t *TxBuf);
+NRF24L01_Result NRF24L01_TxPoll(void);
+NRF24L01_Result NRF24L01_TxAbort(void);
 
 #endif

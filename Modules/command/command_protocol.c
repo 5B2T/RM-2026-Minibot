@@ -42,3 +42,24 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
     *Frame=Decoded;
     return 1;
 }
+uint8_t CommandProtocol_Encode(const RemoteControl_FrameTypeDef *Frame,
+                               uint8_t Output[REMOTE_CONTROL_FRAME_SIZE])
+{
+    if(Frame==NULL || Output==NULL)return 0;
+    uint8_t Data[REMOTE_CONTROL_FRAME_SIZE]={0};
+    Data[0]=Frame->Header;Data[1]=Frame->Version;
+    Data[2]=Frame->Sequence;Data[3]=Frame->Flags;
+    const int16_t Values[]={Frame->M1,Frame->M2,Frame->M3,Frame->M4};
+    for(uint8_t i=0;i<4;i++)
+    {
+        uint16_t Value=(uint16_t)Values[i];
+        Data[4+i*2]=(uint8_t)Value;Data[5+i*2]=(uint8_t)(Value>>8);
+    }
+    memcpy(Data+12,Frame->Reserved,sizeof(Frame->Reserved));
+    uint16_t CRC=CRC16(Data,30);
+    Data[30]=(uint8_t)CRC;Data[31]=(uint8_t)(CRC>>8);
+    RemoteControl_FrameTypeDef Check;
+    if(!CommandProtocol_Decode(Data,sizeof(Data),&Check))return 0;
+    memcpy(Output,Data,sizeof(Data));
+    return 1;
+}

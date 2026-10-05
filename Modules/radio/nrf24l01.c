@@ -8,10 +8,13 @@
 static const uint8_t Address[RX_ADR_WIDTH]={0xb0,0x43,0x10,0x10,0x01};
 static uint8_t Ready;
 static uint8_t ReceiveMode;
+static uint8_t TxPending,TxPulse;
+static uint32_t TxStarted;
 
 static NRF24L01_Result Fault(NRF24L01_Result Result)
 {
     Ready=0;
+    TxPending=0;
     BSP_NRF24L01_SetCE(0);
     return Result;
 }
@@ -85,6 +88,7 @@ NRF24L01_Result NRF24L01_Check(void)
 static NRF24L01_Result Configure(uint8_t RxMode)
 {
     Ready=0;
+    TxPending=0;
     ReceiveMode=RxMode;
     BSP_NRF24L01_SetCE(0);
     // Configure while powered down, then explicitly wait for oscillator start-up.
@@ -149,7 +153,7 @@ NRF24L01_Result NRF24L01_RxPacket(uint8_t *RxBuf)
 NRF24L01_Result NRF24L01_TxPacket(const uint8_t *TxBuf)
 {
     if(!TxBuf)return NRF_INVALID_ARGUMENT;
-    if(!Ready || ReceiveMode)return NRF_NOT_READY;
+    if(!Ready || ReceiveMode || TxPending)return NRF_NOT_READY;
     BSP_NRF24L01_SetCE(0);
     NRF24L01_Result Result=WriteReg(STATUS, TX_OK|MAX_TX);
     if(Result!=NRF_OK)return Result;
@@ -181,4 +185,64 @@ NRF24L01_Result NRF24L01_TxPacket(const uint8_t *TxBuf)
     }
     Result=Transfer(FLUSH_TX, 0, 0, 0);
     return Result==NRF_OK?Fault(NRF_TX_TIMEOUT):Result;
+}
+NRF24L01_Result NRF24L01_TxBegin(const uint8_t *TxBuf)
+{
+    if(TxBuf==NULL)return NRF_INVALID_ARGUMENT;
+    if(!Ready || ReceiveMode || TxPending)return NRF_NOT_READY;
+    BSP_NRF24L01_SetCE(0);
+    NRF24L01_Result Result=WriteReg(STATUS,TX_OK|MAX_TX);
+    if(Result!=NRF_OK)return Result;
+    Result=Transfer(WR_TX_PLOAD,TxBuf,0,TX_PLOAD_WIDTH);
+    if(Result!=NRF_OK)return Result;
+    TxStarted=BSP_TimeMs();TxPending=TxPulse=1;
+    BSP_NRF24L01_SetCE(1);
+    return NRF_PENDING;
+}
+NRF24L01_Result NRF24L01_TxAbort(void)
+{
+    if(!TxPending)return Ready?NRF_OK:NRF_NOT_READY;
+    BSP_NRF24L01_SetCE(0);
+    TxPending=0;
+    NRF24L01_Result Result=WriteReg(CONFIG,0x0c); // Stop retries before FLUSH_TX.
+    if(Result!=NRF_OK)return Result;
+    Result=Transfer(FLUSH_TX,0,0,0);
+    if(Result!=NRF_OK)return Result;
+    Result=WriteReg(STATUS,TX_OK|MAX_TX);
+    if(Result!=NRF_OK)return Result;
+    Result=WriteReg(CONFIG,0x0e);
+    if(Result!=NRF_OK)return Result;
+    BSP_WaitMs(2);
+    return NRF_OK;
+}
+NRF24L01_Result NRF24L01_TxPoll(void)
+{
+    if(!Ready || !TxPending)return NRF_NOT_READY;
+    uint32_t Elapsed=BSP_TimeMs()-TxStarted;
+    if(TxPulse)
+    {
+        if(Elapsed<1)return NRF_PENDING;
+        BSP_NRF24L01_SetCE(0);TxPulse=0;
+    }
+    uint8_t Status;
+    NRF24L01_Result Result=ReadReg(STATUS,&Status);
+    if(Result!=NRF_OK)return Result;
+    if(Status&(TX_OK|MAX_TX))
+    {
+        TxPending=0;
+        Result=WriteReg(STATUS,TX_OK|MAX_TX);
+        if(Result!=NRF_OK)return Result;
+        if(Status&MAX_TX)
+        {
+            Result=Transfer(FLUSH_TX,0,0,0);
+            return Result==NRF_OK?NRF_TX_MAX_RETRY:Result;
+        }
+        return NRF_OK;
+    }
+    if(Elapsed>=NRF_TX_TIMEOUT_MS)
+    {
+        Result=NRF24L01_TxAbort();
+        return Result==NRF_OK?Fault(NRF_TX_TIMEOUT):Result;
+    }
+    return NRF_PENDING;
 }
