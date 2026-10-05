@@ -46,6 +46,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/i2c/bsp_i2c.c
     Modules/display/oled.c
     Modules/power/ina219.c
+    Modules/power/battery_soc.c
     Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c

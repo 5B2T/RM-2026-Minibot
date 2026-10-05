@@ -1,17 +1,25 @@
 #include "components/power/power_monitor.h"
 #include "robot/robot_config.h"
 #include "power/ina219.h"
+#include "power/battery_soc.h"
 #include "i2c/bsp_i2c.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
 
 static Robot_PowerStatus Snapshot;
+static BatterySoc Estimator;
+static const BatterySoc_Point SocCurve[]=ROBOT_BATTERY_SOC_CURVE;
 static uint8_t Initialized,Waiting;
 static uint32_t DelayTick,DelayMs;
 void PowerMonitor_Init(void)
 {
     memset(&Snapshot,0,sizeof(Snapshot));
+    const BatterySoc_Config Config={.Curve=SocCurve,
+        .PointCount=sizeof(SocCurve)/sizeof(SocCurve[0]),
+        .SeriesCells=ROBOT_BATTERY_SERIES_CELLS,.CapacityMah=ROBOT_BATTERY_CAPACITY_MAH,
+        .FilterTimeMs=ROBOT_BATTERY_FILTER_MS,.StaleMs=ROBOT_POWER_STALE_MS};
+    (void)BatterySoc_Init(&Estimator,&Config);
     Initialized=Waiting=0;
 }
 Robot_PowerStatus PowerMonitor_GetStatus(uint32_t NowMs)
@@ -21,6 +29,7 @@ Robot_PowerStatus PowerMonitor_GetStatus(uint32_t NowMs)
     taskEXIT_CRITICAL();
     if(Copy.Valid && (uint32_t)(NowMs-Copy.TickMs)>=ROBOT_POWER_STALE_MS)
     {Copy.Valid=0;Copy.State=ROBOT_POWER_STALE;}
+    if(!Copy.Valid)Copy.SocValid=0;
     return Copy;
 }
 void PowerMonitor_Step(uint32_t NowMs)
@@ -33,6 +42,7 @@ void PowerMonitor_Step(uint32_t NowMs)
             ROBOT_INA219_SHUNT_OHM,ROBOT_INA219_CURRENT_LSB_A,ROBOT_POWER_CONVERSION_TIMEOUT_MS);
         taskENTER_CRITICAL();
         Snapshot.Valid=0;
+        Snapshot.SocValid=0;
         Snapshot.State=Initialized?ROBOT_POWER_WAITING:ROBOT_POWER_CONFIG_ERROR;
         taskEXIT_CRITICAL();
         if(!Initialized)goto Retry;
@@ -40,13 +50,22 @@ void PowerMonitor_Step(uint32_t NowMs)
     INA219_Sample Sample;
     INA219_Result Result=INA219_Step(NowMs,&Sample);
     if(Result==INA219_PENDING)return;
+    BatterySoc_Result Soc={0};
+    if(Result==INA219_SAMPLE)
+    {
+        BatterySoc_Update(&Estimator,Sample.VoltageV,NowMs);
+        Soc=BatterySoc_Get(&Estimator,NowMs);
+    }
+    else BatterySoc_Invalidate(&Estimator);
     taskENTER_CRITICAL();
     if(Result==INA219_SAMPLE)
         Snapshot=(Robot_PowerStatus){.VoltageV=Sample.VoltageV,.CurrentA=Sample.CurrentA,
-            .PowerW=Sample.PowerW,.TickMs=NowMs,.Valid=1,.State=ROBOT_POWER_VALID};
+            .PowerW=Sample.PowerW,.SocPercent=Soc.Percent,.RemainingMah=Soc.RemainingMah,
+            .SocValid=Soc.Valid,.TickMs=NowMs,.Valid=1,.State=ROBOT_POWER_VALID};
     else
     {
         Snapshot.Valid=0;
+        Snapshot.SocValid=0;
         Snapshot.State=Result==INA219_IO_ERROR?ROBOT_POWER_OFFLINE:
             Result==INA219_OVERFLOW?ROBOT_POWER_OVERFLOW:
             Result==INA219_TIMEOUT?ROBOT_POWER_TIMEOUT:

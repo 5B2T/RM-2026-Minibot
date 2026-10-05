@@ -107,7 +107,13 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             Line(5,Text);
         }
         else {Line(2,"V: -- V");Line(3,"I: -- A");Line(4,"P: -- W");}
-        Line(6,"SOC: --"); // Battery parameters / estimator not configured yet.
+        if(Power->Valid && Power->SocValid && isfinite(Power->SocPercent) &&
+            Power->SocPercent>=0 && Power->SocPercent<=100)
+        {
+            (void)snprintf(Text,sizeof(Text),"SOC: ~%ld%%",Scaled(Power->SocPercent,1,100));
+            Line(6,Text);
+        }
+        else Line(6,"SOC: --");
     }
     else
     {

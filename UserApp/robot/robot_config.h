@@ -45,4 +45,14 @@
 #define ROBOT_POWER_CONVERSION_TIMEOUT_MS 100U
 #define ROBOT_POWER_RETRY_MS 1000U
 #define ROBOT_POWER_STALE_MS 500U
+// Confirmed ordinary Li-ion / Li-polymer 3S, 2500 mAh, full pack 12.6 V.
+#define ROBOT_BATTERY_SERIES_CELLS 3U
+#define ROBOT_BATTERY_CAPACITY_MAH 2500.0f
+#define ROBOT_BATTERY_FILTER_MS 3000U
+// Provisional single-cell voltage/SOC points, NOT a measured manufacturer curve.
+// Replace after characterizing this pack. No internal-resistance compensation,
+// coulomb counting or persistence; loaded voltage and reboot affect the estimate.
+// The 0% point is a display reference, not a protection/discharge cutoff.
+#define ROBOT_BATTERY_SOC_CURVE {{3.30f,0},{3.60f,5},{3.70f,10},{3.75f,20}, \
+    {3.80f,30},{3.85f,40},{3.90f,50},{3.95f,60},{4.00f,70},{4.10f,90},{4.20f,100}}
 #endif

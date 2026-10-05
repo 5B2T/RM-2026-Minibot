@@ -35,6 +35,8 @@ typedef enum {ROBOT_POWER_OFFLINE=0,ROBOT_POWER_WAITING,ROBOT_POWER_VALID,
 typedef struct
 {
     float VoltageV,CurrentA,PowerW; // Battery source side; discharge current/power positive.
+    float SocPercent,RemainingMah; // Voltage estimate, nominal capacity; not accuracy certified.
+    uint8_t SocValid; // Requires Valid too; unavailable on sensor fault or stale sample.
     uint32_t TickMs; // Last successful sample, including across tick wrap.
     uint8_t Valid; // Numbers retained on error must not be displayed as valid.
     Robot_PowerState State;
