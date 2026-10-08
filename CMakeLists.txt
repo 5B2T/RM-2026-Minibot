@@ -44,6 +44,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/radio/bsp_nrf24l01.c
     Bsp/time/bsp_time.c
     Bsp/i2c/bsp_i2c.c
+    Bsp/input/bsp_buttons.c
     Modules/display/oled.c
     Modules/power/ina219.c
     Modules/power/battery_soc.c

@@ -7,18 +7,67 @@
 #include <math.h>
 #include <stdio.h>
 #include <stddef.h>
+#include <string.h>
 
-static DebugDisplay_State Menu={DEBUG_PAGE_STATUS,1,0};
-static uint8_t Started,RetryPending,PageClockValid,FrameClockValid;
-static uint32_t RetryTick,PageTick,FrameTick;
+static DebugDisplay_State Menu={.Page=DEBUG_PAGE_STATUS,.MainMenu=1};
+static uint8_t Started,RetryPending,FrameClockValid,KeysStarted;
+static uint32_t RetryTick,FrameTick;
 static uint32_t MenuRevision,SeenRevision;
+typedef struct {uint8_t Raw,Stable;uint32_t ChangeTick;} Display_Key;
+static Display_Key NextKey,BackKey;
+static const char *const PageNames[]={"STATUS","SPEED","PWM","POWER"};
+
+void DebugDisplay_Init(void)
+{
+    Menu=(DebugDisplay_State){.Page=DEBUG_PAGE_STATUS,.MainMenu=1};
+    Started=RetryPending=FrameClockValid=KeysStarted=0;
+    MenuRevision=SeenRevision=0;
+    memset(&NextKey,0,sizeof(NextKey));
+    memset(&BackKey,0,sizeof(BackKey));
+}
+// 1: debounced press, 2: debounced release. Held-at-boot keys require release first.
+static uint8_t KeyUpdate(Display_Key *Key,uint8_t Raw,uint32_t NowMs)
+{
+    Raw=Raw!=0;
+    if(Raw!=Key->Raw) {Key->Raw=Raw;Key->ChangeTick=NowMs;}
+    if(Key->Stable==Raw || (uint32_t)(NowMs-Key->ChangeTick)<ROBOT_BUTTON_DEBOUNCE_MS)return 0;
+    Key->Stable=Raw;
+    return Raw?1:2;
+}
+void DebugDisplay_HandleKeys(uint8_t NextPressed,uint8_t BackPressed,uint32_t NowMs)
+{
+    taskENTER_CRITICAL();
+    if(!KeysStarted)
+    {
+        KeysStarted=1;
+        NextKey=(Display_Key){.Raw=NextPressed!=0,.Stable=NextPressed!=0};
+        BackKey=(Display_Key){.Raw=BackPressed!=0,.Stable=BackPressed!=0};
+        taskEXIT_CRITICAL();
+        return;
+    }
+    uint8_t NextEvent=KeyUpdate(&NextKey,NextPressed,NowMs);
+    uint8_t BackEvent=KeyUpdate(&BackKey,BackPressed,NowMs);
+    if(BackEvent==1)
+    {
+        if(Menu.MainMenu)Menu.Page=(DebugDisplay_Page)Menu.Cursor;
+        Menu.MainMenu=!Menu.MainMenu;
+        MenuRevision++;
+    }
+    else if(Menu.MainMenu && NextEvent==1 && !BackPressed && !BackKey.Stable)
+    {
+        Menu.Cursor=(uint8_t)((Menu.Cursor+1)%DEBUG_PAGE_COUNT);
+        MenuRevision++;
+    }
+    taskEXIT_CRITICAL();
+}
 
 void DebugDisplay_SetPage(DebugDisplay_Page Page)
 {
     if((unsigned)Page>=DEBUG_PAGE_COUNT)return;
     taskENTER_CRITICAL();
     Menu.Page=Page;
-    Menu.Auto=0;
+    Menu.MainMenu=0;
+    Menu.Cursor=(uint8_t)Page;
     MenuRevision++;
     taskEXIT_CRITICAL();
 }
@@ -26,14 +75,15 @@ void DebugDisplay_NextPage(void)
 {
     taskENTER_CRITICAL();
     Menu.Page=(DebugDisplay_Page)((Menu.Page+1)%DEBUG_PAGE_COUNT);
-    Menu.Auto=0;
+    Menu.MainMenu=0;
+    Menu.Cursor=(uint8_t)Menu.Page;
     MenuRevision++;
     taskEXIT_CRITICAL();
 }
-void DebugDisplay_SetAuto(uint8_t Enabled)
+void DebugDisplay_ShowMenu(void)
 {
     taskENTER_CRITICAL();
-    Menu.Auto=Enabled!=0;
+    Menu.MainMenu=1;
     MenuRevision++;
     taskEXIT_CRITICAL();
 }
@@ -72,9 +122,20 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
 {
     char Text[22];
     OLED_Clear();
+    if(View.MainMenu)
+    {
+        Line(0,"MAIN MENU");
+        for(unsigned i=0;i<DEBUG_PAGE_COUNT;i++)
+        {
+            (void)snprintf(Text,sizeof(Text),"%s %s",View.Cursor==i?">":" ",PageNames[i]);
+            Line((uint8_t)(i+2),Text);
+        }
+        Line(6,"PA15: NEXT");
+        Line(7,"PE6: ENTER");
+        return;
+    }
     (void)snprintf(Text,sizeof(Text),"%u/%u %s",(unsigned)View.Page+1,(unsigned)DEBUG_PAGE_COUNT,
-        View.Page==DEBUG_PAGE_STATUS?"STATUS":View.Page==DEBUG_PAGE_SPEED?"SPEED":
-        View.Page==DEBUG_PAGE_PWM?"PWM":"POWER");
+        PageNames[View.Page]);
     Line(0,Text);
     if(View.Page==DEBUG_PAGE_STATUS)
     {
@@ -131,7 +192,7 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         else (void)snprintf(Text,sizeof(Text),"PHYSICAL M1..M4");
         Line(6,Text);
     }
-    Line(7,View.Auto?"PAGE: AUTO":"PAGE: HOLD");
+    Line(7,"PE6: BACK TO MENU");
 }
 uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs)
 {
@@ -148,7 +209,6 @@ uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs)
         if(!OLED_Init(BSP_I2C_Write,ROBOT_OLED_ADDRESS))goto Failure;
         RetryPending=0;
         FrameClockValid=0;
-        PageClockValid=0;
     }
     if(OLED_IsFlushing())
     {
@@ -157,17 +217,6 @@ uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs)
         return ROBOT_DISPLAY_POLL_MS;
     }
     taskENTER_CRITICAL();
-    if(!PageClockValid || SeenRevision!=MenuRevision)
-    {
-        PageTick=NowMs;
-        PageClockValid=1;
-    }
-    else if(Menu.Auto && (uint32_t)(NowMs-PageTick)>=ROBOT_DISPLAY_PAGE_MS)
-    {
-        Menu.Page=(DebugDisplay_Page)((Menu.Page+1)%DEBUG_PAGE_COUNT);
-        PageTick=NowMs;
-        MenuRevision++;
-    }
     uint8_t Changed=SeenRevision!=MenuRevision;
     SeenRevision=MenuRevision;
     DebugDisplay_State View=Menu;

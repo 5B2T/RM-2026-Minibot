@@ -28,5 +28,10 @@
 #define BOARD_I2C_MAX_WRITE_SIZE 33U
 #define BOARD_I2C_LOCK_TIMEOUT_MS 5U
 #define BOARD_I2C_WRITE_TIMEOUT_MS 10U
+// Core-board SW2 / SW4, pressed connects to GND; internal pull-ups enabled.
+#define BOARD_BUTTON_NEXT_PORT GPIOA
+#define BOARD_BUTTON_NEXT_PIN GPIO_PIN_15
+#define BOARD_BUTTON_BACK_PORT GPIOE
+#define BOARD_BUTTON_BACK_PIN GPIO_PIN_6
 
 #endif

@@ -8,6 +8,7 @@
 #include "time/bsp_time.h"
 #include "i2c/bsp_i2c.h"
 #include "components/display/debug_display.h"
+#include "input/bsp_buttons.h"
 #include "components/power/power_monitor.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -26,6 +27,7 @@ uint8_t Robot_Init(void)
     RadioRecoveryPending=0;
     RemoteControl_Init();
     PowerMonitor_Init();
+    DebugDisplay_Init();
     DisplayScheduled=0;
     if(!BSP_Motor_Init() || !BSP_Encoder_Init() || !Chassis_Init())
     {
@@ -99,6 +101,8 @@ uint32_t Robot_DisplayStep(void)
     // critical sections leave BASEPRI set and block the HAL tick / startup delays.
     (void)BSP_I2C_Init(); // Sensor/display failure must not prevent chassis initialization.
     uint32_t NowMs=BSP_TimeMs();
+    uint8_t Keys=BSP_Buttons_Read();
+    DebugDisplay_HandleKeys((Keys&BSP_BUTTON_NEXT)!=0,(Keys&BSP_BUTTON_BACK)!=0,NowMs);
     PowerMonitor_Step(NowMs);
     if(DisplayScheduled && (uint32_t)(NowMs-DisplayTick)<DisplayDelay)return ROBOT_DISPLAY_POLL_MS;
     Robot_Status Status;
