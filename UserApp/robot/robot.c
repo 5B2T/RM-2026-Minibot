@@ -27,7 +27,6 @@ uint8_t Robot_Init(void)
     RemoteControl_Init();
     PowerMonitor_Init();
     DisplayScheduled=0;
-    (void)BSP_I2C_Init(); // Sensor/display failure must not prevent chassis initialization.
     if(!BSP_Motor_Init() || !BSP_Encoder_Init() || !Chassis_Init())
     {
         BSP_Motor_Disable();
@@ -96,6 +95,9 @@ void Robot_GetStatus(Robot_Status *Status)
 }
 uint32_t Robot_DisplayStep(void)
 {
+    // Create the mutex in its service task. Before scheduler start, FreeRTOS
+    // critical sections leave BASEPRI set and block the HAL tick / startup delays.
+    (void)BSP_I2C_Init(); // Sensor/display failure must not prevent chassis initialization.
     uint32_t NowMs=BSP_TimeMs();
     PowerMonitor_Step(NowMs);
     if(DisplayScheduled && (uint32_t)(NowMs-DisplayTick)<DisplayDelay)return ROBOT_DISPLAY_POLL_MS;
