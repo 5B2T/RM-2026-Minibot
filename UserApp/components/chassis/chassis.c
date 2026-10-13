@@ -25,10 +25,15 @@ uint8_t Chassis_Init(void)
                         ROBOT_WHEEL_SPEED_LIMIT_MPS,Wheels)) {Chassis_Stop();return 0;}
     static const int8_t MotorSign[4]=ROBOT_MOTOR_POLARITY;
     static const int8_t EncoderSign[4]=ROBOT_ENCODER_POLARITY;
-    return Speed_Init(ROBOT_WHEEL_DIAMETER_M, ROBOT_ENCODER_CPR) &&
+    uint8_t Valid=Speed_Init(ROBOT_WHEEL_DIAMETER_M, ROBOT_ENCODER_CPR) &&
            MotorControl_Init(ROBOT_SPEED_KP, ROBOT_SPEED_KI,
                              BSP_MOTOR_PWM_MAX, ROBOT_WHEEL_SPEED_LIMIT_MPS) &&
            MotorControl_SetPolarity(MotorSign, EncoderSign);
+    static const float Kp[WHEEL_COUNT]=ROBOT_SPEED_KP_BY_CHANNEL;
+    static const float Ki[WHEEL_COUNT]=ROBOT_SPEED_KI_BY_CHANNEL;
+    for(uint8_t i=0;Valid && i<WHEEL_COUNT;i++)Valid=MotorControl_SetGains(i,Kp[i],Ki[i]);
+    if(!Valid)Chassis_Stop();
+    return Valid;
 }
 void Chassis_ResetSampling(void)
 {

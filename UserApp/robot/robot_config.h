@@ -11,6 +11,12 @@
 // Commissioning values; gains and limit require vehicle verification.
 #define ROBOT_SPEED_KP 600.0f
 #define ROBOT_SPEED_KI 80.0f
+// Physical M1..M4. Only M2 tuned with its wheel suspended (2026-10-13).
+// Gains use wheel-rim m/s, PWM counts and integral(error * seconds).
+// M2 verified at 0.10..0.35 m/s forward and 0.15..0.30 m/s reverse;
+// floor load, the other wheels and the full 0.5 m/s limit remain unverified.
+#define ROBOT_SPEED_KP_BY_CHANNEL {ROBOT_SPEED_KP,1200.0f,ROBOT_SPEED_KP,ROBOT_SPEED_KP}
+#define ROBOT_SPEED_KI_BY_CHANNEL {ROBOT_SPEED_KI,10000.0f,ROBOT_SPEED_KI,ROBOT_SPEED_KI}
 #define ROBOT_WHEEL_SPEED_LIMIT_MPS 0.5f
 // Body axes: +x forward, +y left, +wz counterclockwise viewed from above.
 // Positive wheel speed means that wheel drives the vehicle forward.

@@ -41,6 +41,18 @@ uint8_t MotorControl_SetPolarity(const int8_t MotorSign[4], const int8_t Encoder
     memcpy(EncoderPolarity, EncoderSign, sizeof(EncoderPolarity));
     return 1;
 }
+uint8_t MotorControl_SetGains(uint8_t Wheel, float Kp, float Ki)
+{
+    if(!Initialized || Enabled || Wheel>=WHEEL_COUNT ||
+       !isfinite(Kp) || Kp<0 || !isfinite(Ki) || Ki<0)return 0;
+    Controllers[Wheel].Kp=Kp;
+    Controllers[Wheel].Ki=Ki;
+    PI_Reset(&Controllers[Wheel]);
+    MotorControl[Wheel].MotorControl_Kp=Kp;
+    MotorControl[Wheel].MotorControl_Ki=Ki;
+    MotorControl[Wheel].MotorControl_I=0;
+    return 1;
+}
 float MotorControl_GetMeasuredSpeed(uint8_t Wheel)
 {
     return Wheel<WHEEL_COUNT?Speed_Get(Wheel)*EncoderPolarity[Wheel]:0;

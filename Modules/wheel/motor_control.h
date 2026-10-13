@@ -12,6 +12,8 @@ typedef struct
 }MotorControl_HandleTypeDef;
 
 uint8_t MotorControl_Init(float Kp, float Ki, float OutputLimit, float TargetLimitMps);
+// Per-channel gains; change only while stopped and reset that channel's integral.
+uint8_t MotorControl_SetGains(uint8_t Wheel, float Kp, float Ki);
 // Set signs only while disabled; rejects invalid signs without partial updates.
 uint8_t MotorControl_SetPolarity(const int8_t MotorSign[4], const int8_t EncoderSign[4]);
 float MotorControl_GetMeasuredSpeed(uint8_t Wheel); // Forward-positive m/s.
