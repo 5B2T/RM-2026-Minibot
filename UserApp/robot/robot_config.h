@@ -41,6 +41,23 @@
 #define ROBOT_DISPLAY_POLL_MS 5U
 #define ROBOT_DISPLAY_REFRESH_MS 500U
 #define ROBOT_BUTTON_DEBOUNCE_MS 30U
+// J1 shoulder, J2 elbow, J3 wrist pitch, J4 wrist roll, J5 gripper.
+// These endpoints/directions/neutral pulses are provisional, not board calibration.
+#define ROBOT_ARM_SERVO_CONFIG { \
+    {SERVO_POSITION,500,1500,2500,295.0f,1}, \
+    {SERVO_CONTINUOUS,500,1500,2500,0,1}, \
+    {SERVO_CONTINUOUS,500,1500,2500,0,1}, \
+    {SERVO_POSITION,500,1500,2500,180.0f,1}, \
+    {SERVO_POSITION,500,1500,2500,180.0f,1} }
+#define ROBOT_ARM_PRESET_DEG {147.5f,0,0,90.0f,90.0f}
+#define ROBOT_ARM_POSITION_RATE_DPS 90.0f
+#define ROBOT_ARM_COMMAND_MAX_MS 5000U
+#define ROBOT_ARM_MAX_SAMPLE_S 0.1f
+#define ROBOT_ARM_BASE_PWM_LIMIT 300
+// 11PPR * 150 reduction * x4. Confirm actual gearing before angle calibration.
+#define ROBOT_ARM_BASE_CPR 6600.0f
+#define ROBOT_ARM_BASE_MOTOR_SIGN 1
+#define ROBOT_ARM_BASE_ENCODER_SIGN 1
 #define ROBOT_DISPLAY_RETRY_MS 1000U
 // R100 (0.1 ohm), A0/A1 open jumpers, seven-bit address.
 // +/-320 mV covers +/-3.2 A; 0.1 mA register scaling covers that range.

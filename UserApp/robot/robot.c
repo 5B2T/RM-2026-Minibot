@@ -10,6 +10,7 @@
 #include "components/display/debug_display.h"
 #include "input/bsp_buttons.h"
 #include "components/power/power_monitor.h"
+#include "components/arm/arm.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
@@ -18,6 +19,8 @@ static uint8_t RadioRecoveryPending;
 static uint8_t Ready;
 static uint8_t DisplayScheduled;
 static uint32_t DisplayTick,DisplayDelay;
+static struct {Arm_Command Command;uint32_t CreatedMs;uint8_t Pending,Stop;} ArmMailbox;
+static uint8_t ArmRemoteWasArmed;
 _Static_assert(RX_PLOAD_WIDTH==REMOTE_CONTROL_FRAME_SIZE, "Radio payload must match protocol");
 
 uint8_t Robot_Init(void)
@@ -25,13 +28,16 @@ uint8_t Robot_Init(void)
     Ready=0;
     memset(&StatusSnapshot, 0, sizeof(StatusSnapshot));
     RadioRecoveryPending=0;
+    memset(&ArmMailbox,0,sizeof(ArmMailbox));
+    ArmRemoteWasArmed=0;
     RemoteControl_Init();
     PowerMonitor_Init();
     DebugDisplay_Init();
     DisplayScheduled=0;
-    if(!BSP_Motor_Init() || !BSP_Encoder_Init() || !Chassis_Init())
+    if(!BSP_Motor_Init() || !BSP_Encoder_Init() || !Chassis_Init() || !Arm_Init())
     {
         BSP_Motor_Disable();
+        Arm_Disable();
         return 0;
     }
     NRF24L01_SPI_Init();
@@ -41,11 +47,47 @@ uint8_t Robot_Init(void)
 }
 void Robot_ControlReset(void)
 {
-    if(Ready)Chassis_ResetSampling();
+    if(Ready) {Chassis_ResetSampling();Arm_ResetSampling();}
+}
+void Robot_ArmStop(void)
+{
+    taskENTER_CRITICAL();
+    ArmMailbox.Pending=0;ArmMailbox.Stop=1;
+    taskEXIT_CRITICAL();
+}
+uint8_t Robot_ArmSubmit(const Arm_Command *Command)
+{
+    if(!Ready)return 0;
+    if(!Arm_CommandValid(Command)) {Robot_ArmStop();return 0;}
+    if(Command->Action==ARM_STOP) {Robot_ArmStop();return 1;}
+    uint32_t NowMs=BSP_TimeMs();uint8_t Accepted=0;
+    taskENTER_CRITICAL();
+    if(!ArmMailbox.Stop)
+    {
+        ArmMailbox.Command=*Command;ArmMailbox.CreatedMs=NowMs;
+        ArmMailbox.Pending=1;Accepted=1;
+    }
+    taskEXIT_CRITICAL();
+    return Accepted;
+}
+static void ArmControlStep(float DtS,uint32_t NowMs,RemoteControl_LinkStatus Link)
+{
+    Arm_Command Command;uint32_t CreatedMs;uint8_t Pending,Stop;
+    taskENTER_CRITICAL();
+    Command=ArmMailbox.Command;CreatedMs=ArmMailbox.CreatedMs;
+    Pending=ArmMailbox.Pending;Stop=ArmMailbox.Stop;
+    ArmMailbox.Pending=ArmMailbox.Stop=0;
+    taskEXIT_CRITICAL();
+    // Local commissioning is time-limited; loss of an armed radio link still stops it.
+    if(ArmRemoteWasArmed && (!Link.Connected || !Link.Armed))Stop=1;
+    ArmRemoteWasArmed=Link.Connected && Link.Armed;
+    if(Stop)Arm_Stop();
+    else if(Pending)(void)Arm_Request(&Command,CreatedMs,NowMs);
+    Arm_Step(DtS,NowMs);
 }
 void Robot_ControlStep(float DtS)
 {
-    if(!Ready) {BSP_Motor_Disable();return;}
+    if(!Ready) {BSP_Motor_Disable();Arm_Stop();return;}
     Robot_ChassisCommand Command;
     if(!Chassis_Measure(DtS))Chassis_Stop();
     else
@@ -57,6 +99,8 @@ void Robot_ControlStep(float DtS)
     Chassis_GetFeedback(&Status);
     Status.TickMs=BSP_TimeMs();
     RemoteControl_LinkStatus Link=RemoteControl_GetLinkStatus();
+    ArmControlStep(DtS,Status.TickMs,Link);
+    Status.Arm=Arm_GetStatus();
     Status.Connected=Link.Connected;
     Status.Armed=Link.Armed;
     taskENTER_CRITICAL();

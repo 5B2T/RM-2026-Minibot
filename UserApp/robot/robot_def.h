@@ -1,6 +1,7 @@
 #ifndef ROBOT_DEF_H
 #define ROBOT_DEF_H
 #include <stdint.h>
+#include "components/arm/arm_def.h"
 #define ROBOT_WHEEL_COUNT 4U
 // Canonical wheel position order; actual physical channels are configured separately.
 typedef enum {ROBOT_WHEEL_FL=0,ROBOT_WHEEL_FR,ROBOT_WHEEL_RL,ROBOT_WHEEL_RR} Robot_WheelPosition;
@@ -52,5 +53,6 @@ typedef struct
     uint8_t Armed; // Command link authorizes motion; independent of actual driver enable.
     uint8_t MotorsEnabled;
     Robot_PowerStatus Power; // Independently sampled with its own timestamp and validity.
+    Arm_Status Arm; // Commanded pose and relative base feedback, no absolute arm sensing.
 } Robot_Status;
 #endif

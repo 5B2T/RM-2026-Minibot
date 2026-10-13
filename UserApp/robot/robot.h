@@ -11,4 +11,8 @@ uint32_t Robot_CommunicationStep(void); // Communication owner, returns next del
 uint32_t Robot_DisplayStep(void); // Power/display service owner; next polling delay in ms.
 // Each component is copied atomically; chassis and power have independent timestamps.
 void Robot_GetStatus(Robot_Status *Status);
+// Local commissioning / future command ingress. Task context, never ISR.
+// Motion requires an explicit bounded request; arm commands are not in radio frames yet.
+uint8_t Robot_ArmSubmit(const Arm_Command *Command);
+void Robot_ArmStop(void); // Dominates queued motion, applied by control task next cycle.
 #endif

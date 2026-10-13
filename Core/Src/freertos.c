@@ -113,7 +113,7 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of MotorTast */
-  osThreadDef(MotorTast, StartMotorTast, osPriorityAboveNormal, 0, 256);
+  osThreadDef(MotorTast, StartMotorTast, osPriorityAboveNormal, 0, 384);
   MotorTastHandle = osThreadCreate(osThread(MotorTast), NULL);
 
   /* definition and creation of CommTask */
