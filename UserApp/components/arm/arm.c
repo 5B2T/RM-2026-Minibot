@@ -5,7 +5,8 @@
 #include <math.h>
 #include <stddef.h>
 #include <string.h>
-static const Servo_Config Servos[ARM_SERVO_COUNT]=ROBOT_ARM_SERVO_CONFIG;
+static Servo_Config Servos[ARM_SERVO_COUNT]=ROBOT_ARM_SERVO_CONFIG;
+static const Servo_Config DefaultServos[ARM_SERVO_COUNT]=ROBOT_ARM_SERVO_CONFIG;
 static const float Preset[ARM_SERVO_COUNT]=ROBOT_ARM_PRESET_DEG;
 static Arm_Status State;
 static float Target[ARM_SERVO_COUNT];
@@ -40,6 +41,7 @@ uint8_t Arm_Init(void)
 {
     Arm_Disable();
     memset(&State,0,sizeof(State));State.SelectedJoint=ARM_SHOULDER;
+    memcpy(Servos,DefaultServos,sizeof(Servos));
     for(uint8_t i=0;i<ARM_SERVO_COUNT;i++)
     {
         State.CommandedAngleDeg[i]=Target[i]=Preset[i];
@@ -63,6 +65,10 @@ uint8_t Arm_CommandValid(const Arm_Command *Command)
     if(Command->Action==ARM_POSITION)
         return Command->Joint<ARM_SERVO_COUNT && Servos[Command->Joint].Mode==SERVO_POSITION &&
                Command->Value>=0 && Command->Value<=Servos[Command->Joint].MaxAngleDeg;
+    if(Command->Action==ARM_NEUTRAL)
+        return Command->Joint<ARM_SERVO_COUNT && Servos[Command->Joint].Mode==SERVO_CONTINUOUS &&
+               Command->Value>=Servos[Command->Joint].MinUs && Command->Value<=Servos[Command->Joint].MaxUs &&
+               floorf(Command->Value)==Command->Value;
     return 0;
 }
 uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs)
@@ -74,6 +80,13 @@ uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs
     Arm_Stop();if(!State.Ready)return 0;
     State.Fault=ARM_OK;
     if(Command->Action==ARM_STOP)return 1;
+    if(Command->Action==ARM_NEUTRAL)
+    {
+        Servos[Command->Joint].NeutralUs=(uint16_t)Command->Value;
+        State.SelectedJoint=Command->Joint;State.Action=ARM_NEUTRAL;
+        if(!Apply()) {HardwareFault();return 0;}
+        return 1; // RAM calibration persists through stop/timeout, not through reboot.
+    }
     Started=CreatedMs;Duration=Command->DurationMs;
     State.Action=Command->Action;State.Active=1;
     if(Command->Action==ARM_PRESET)memcpy(Target,Preset,sizeof(Target));

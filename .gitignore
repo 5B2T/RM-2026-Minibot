@@ -53,6 +53,7 @@ Release/
 Testing/
 coverage/
 *.log
+__pycache__/
 
 # OS-generated files
 .DS_Store

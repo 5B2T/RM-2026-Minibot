@@ -24,6 +24,7 @@
 #include "i2c.h"
 #include "spi.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -109,6 +110,7 @@ int main(void)
   MX_TIM11_Init();
   MX_TIM12_Init();
   MX_TIM13_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   if(!Robot_Init())Error_Handler();

@@ -5,6 +5,13 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "cmsis_os.h"
+#include "components/host/arm_debug.h"
+
+void StartDefaultTask(void const *Argument)
+{
+    (void)Argument;
+    for(;;)osDelay(ArmDebug_Step());
+}
 
 void StartMotorTast(void const *argument)
 {

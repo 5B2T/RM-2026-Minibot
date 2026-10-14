@@ -46,6 +46,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/i2c/bsp_i2c.c
     Bsp/input/bsp_buttons.c
     Bsp/arm/bsp_arm.c
+    Bsp/uart/bsp_debug_uart.c
     Modules/actuator/servo.c
     Modules/display/oled.c
     Modules/power/ina219.c
@@ -53,6 +54,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c
+    Modules/command/arm_debug_protocol.c
     Modules/radio/nrf24l01.c
     Modules/wheel/speed.c
     Modules/wheel/motor_control.c
@@ -61,6 +63,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     UserApp/components/display/debug_display.c
     UserApp/components/power/power_monitor.c
     UserApp/components/arm/arm.c
+    UserApp/components/host/arm_debug.c
     UserApp/robot/robot.c
     UserApp/os_task.c
 )

@@ -52,6 +52,7 @@
 #define ROBOT_ARM_PRESET_DEG {147.5f,0,0,90.0f,90.0f}
 #define ROBOT_ARM_POSITION_RATE_DPS 90.0f
 #define ROBOT_ARM_COMMAND_MAX_MS 5000U
+#define ROBOT_ARM_DEBUG_TIMEOUT_MS 300U
 #define ROBOT_ARM_MAX_SAMPLE_S 0.1f
 #define ROBOT_ARM_BASE_PWM_LIMIT 300
 // 11PPR * 150 reduction * x4. Confirm actual gearing before angle calibration.
