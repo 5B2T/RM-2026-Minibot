@@ -4,25 +4,31 @@
 #define ROBOT_CONTROL_PERIOD_MS 10U
 #define ROBOT_CHASSIS_TEST_SPEED_MPS 0.10f
 #define ROBOT_CHASSIS_TEST_TURN_RADPS 0.4f
+// Body-center path radius; +Vx and +Wz circle around a point to the left.
+#define ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M 0.50f
 #define ROBOT_CHASSIS_TEST_UI_TIMEOUT_MS 100U
 #define ROBOT_CHASSIS_TEST_NO_ENCODER_MS 500U
 #define ROBOT_CHASSIS_TEST_BACK_HOLD_MS 1000U
 #define ROBOT_CHASSIS_TEST_REFRESH_MS 100U
+#define ROBOT_CHASSIS_TEST_AUTO_RUN_MS 1000U
+#define ROBOT_CHASSIS_TEST_AUTO_PAUSE_MS 1000U
 #define ROBOT_COMM_POLL_MS 5U
 #define ROBOT_RADIO_RETRY_MS 100U
 #define ROBOT_REMOTE_TIMEOUT_MS 100U
 #define ROBOT_WHEEL_DIAMETER_M 0.060f
 // 13 encoder lines * 30 reduction * x4 decoding, per output-shaft revolution.
 #define ROBOT_ENCODER_CPR 1560.0f
-// Default PI gains for all four wheels, based on M2 suspended-wheel tuning.
+// Fallback PI gains from the original M2 tuning; measured channel overrides below.
 #define ROBOT_SPEED_KP 1200.0f
 #define ROBOT_SPEED_KI 10000.0f
-// Physical M1..M4; individual channels can be overridden after further tuning.
+// Physical M1..M4; all four tuned with wheels fitted and suspended.
 // Gains use wheel-rim m/s, PWM counts and integral(error * seconds).
-// M2 verified at 0.10..0.35 m/s forward and 0.15..0.30 m/s reverse;
-// floor load, the other wheels and the full 0.5 m/s limit remain unverified.
-#define ROBOT_SPEED_KP_BY_CHANNEL {ROBOT_SPEED_KP,ROBOT_SPEED_KP,ROBOT_SPEED_KP,ROBOT_SPEED_KP}
-#define ROBOT_SPEED_KI_BY_CHANNEL {ROBOT_SPEED_KI,ROBOT_SPEED_KI,ROBOT_SPEED_KI,ROBOT_SPEED_KI}
+// Replacement M2 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
+// M3/M4 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
+// M1 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
+// Floor load and the full 0.5 m/s limit remain unverified.
+#define ROBOT_SPEED_KP_BY_CHANNEL {1600.0f,ROBOT_SPEED_KP,1200.0f,1600.0f}
+#define ROBOT_SPEED_KI_BY_CHANNEL {20000.0f,16000.0f,16000.0f,20000.0f}
 #define ROBOT_WHEEL_SPEED_LIMIT_MPS 0.5f
 // Body axes: +x forward, +y left, +wz counterclockwise viewed from above.
 // Positive wheel speed means that wheel drives the vehicle forward.
@@ -33,14 +39,15 @@
 #define ROBOT_CHANNEL_RL 2U
 #define ROBOT_CHANNEL_RR 3U
 #define ROBOT_WHEEL_CHANNEL_MAP {ROBOT_CHANNEL_FL,ROBOT_CHANNEL_FR,ROBOT_CHANNEL_RL,ROBOT_CHANNEL_RR}
-// Provisional center distances: 250 mm rim gap + 60 mm diameter;
-// 234 mm side gap + assumed 30 mm wheel width. Replace with measured values.
+// Center distances from supplied clearances: 250 mm fore/aft gap + 60 mm diameter;
+// 234 mm side gap + measured 33.5 mm wheel width. Ground calibration pending.
 #define ROBOT_CHASSIS_WHEELBASE_M 0.310f
-#define ROBOT_CHASSIS_TRACK_M 0.264f
+#define ROBOT_CHASSIS_TRACK_M 0.2675f
 // Indexed by physical M1..M4, each sign must be +1 or -1.
 // +1 preserves original software polarity, which has NOT been checked on hardware.
 #define ROBOT_MOTOR_POLARITY {1,1,1,1}
-#define ROBOT_ENCODER_POLARITY {1,1,1,1}
+// M4 forward wheel motion was verified with negative raw encoder counts.
+#define ROBOT_ENCODER_POLARITY {1,1,1,-1}
 // SSD1306 four-pin module, seven-bit address. No external reset GPIO.
 #define ROBOT_OLED_ADDRESS 0x3cU
 #define ROBOT_DISPLAY_POWER_WAIT_MS 200U

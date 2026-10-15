@@ -17,7 +17,7 @@ static uint32_t MenuRevision,SeenRevision;
 typedef struct {uint8_t Raw,Stable;uint32_t ChangeTick;} Display_Key;
 static Display_Key NextKey,BackKey;
 static const char *const PageNames[]={"STATUS","SPEED","PWM","POWER","CHASSIS TEST"};
-static const char *const TestNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW","M1+","M2+","M3+","M4+"};
+static const char *const TestNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW","M1+","M2+","M3+","M4+","AUTO","CIRCLE CCW"};
 _Static_assert(sizeof(PageNames)/sizeof(PageNames[0])==DEBUG_PAGE_COUNT,"OLED page names mismatch");
 _Static_assert(sizeof(TestNames)/sizeof(TestNames[0])==CHASSIS_TEST_COUNT,"Chassis preset names mismatch");
 static uint8_t TestAwaitRelease,TestBackDown,TestBackConsumed;
@@ -188,7 +188,11 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         const ChassisTest_Status *Test=&Status->ChassisTest;
         unsigned Preset=(unsigned)Test->Preset<CHASSIS_TEST_COUNT?(unsigned)Test->Preset:0;
         Line(0,"CHASSIS TEST  MM/S");
-        (void)snprintf(Text,sizeof(Text),"%s %s",TestNames[Preset],Test->Running?"RUN":"STOP");
+        if(Preset==CHASSIS_TEST_AUTO && Test->Running && Test->ActivePreset<=CHASSIS_TEST_CW)
+            (void)snprintf(Text,sizeof(Text),"AUTO %u/6 %s %s",(unsigned)Test->ActivePreset+1U,
+                TestNames[Test->ActivePreset],Test->Paused?"WAIT":"RUN");
+        else (void)snprintf(Text,sizeof(Text),"%s %s",TestNames[Preset],
+            Test->Completed?"DONE":Test->Running?"RUN":"STOP");
         Line(1,Text);
         for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
         {
@@ -199,6 +203,13 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         if(Test->Fault==CHASSIS_TEST_NO_ENCODER || Test->Fault==CHASSIS_TEST_REVERSED_ENCODER)
         {
             (void)snprintf(Text,sizeof(Text),"%s M%u",Test->Fault==CHASSIS_TEST_NO_ENCODER?"NO ENC":"ENC SIGN",(unsigned)Test->FaultWheel);
+            Line(6,Text);
+        }
+        else if(Test->Fault==CHASSIS_TEST_OK && Preset==CHASSIS_TEST_CIRCLE_CCW)
+        {
+            (void)snprintf(Text,sizeof(Text),"R:%ldCM %ldMM/S",
+                Scaled(ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M,100,9999),
+                Scaled(ROBOT_CHASSIS_TEST_SPEED_MPS,1000,9999));
             Line(6,Text);
         }
         else Line(6,Test->Fault==CHASSIS_TEST_DISPLAY_LOST?"DISPLAY LOST":

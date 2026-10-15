@@ -13,11 +13,14 @@ static struct {
 static ChassisTest_Status State,Published;
 static uint8_t Owned,Released,WasConnected;
 static uint32_t Started,LastStopGeneration,LastMovement[ROBOT_WHEEL_COUNT];
+static uint32_t PhaseTick;
 
 void ChassisTest_Init(void)
 {
     memset(&Inbox,0,sizeof(Inbox));memset(&State,0,sizeof(State));Published=State;
+    Inbox.Preset=State.Preset=CHASSIS_TEST_AUTO;Published=State;
     Owned=Released=WasConnected=0;Started=LastStopGeneration=0;
+    PhaseTick=0;
     memset(LastMovement,0,sizeof(LastMovement));
 }
 void ChassisTest_View(uint8_t Visible,uint8_t Online,uint32_t NowMs)
@@ -58,6 +61,12 @@ ChassisTest_Status ChassisTest_GetStatus(void)
 static void Halt(ChassisTest_Fault Fault,uint8_t Wheel)
 {
     State.Running=0;State.Fault=Fault;State.FaultWheel=Wheel;
+    State.Paused=State.Completed=0;
+}
+static void BeginMotion(uint32_t Now)
+{
+    Started=PhaseTick=Now;
+    for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)LastMovement[i]=Now;
 }
 static void Publish(void)
 {
@@ -88,6 +97,7 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
     Owned=Visible;State.Visible=Visible;
     if(Preset!=State.Preset)Halt(CHASSIS_TEST_OK,0);
     State.Preset=Preset;
+    if(Preset!=CHASSIS_TEST_AUTO)State.ActivePreset=Preset;
     if(!Claim) {Publish();return 0;}
     uint8_t RemoteStop=RemoteStopGeneration!=LastStopGeneration || (WasConnected && !RemoteConnected);
     LastStopGeneration=RemoteStopGeneration;WasConnected=RemoteConnected;
@@ -105,11 +115,29 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
                 Halt(CHASSIS_TEST_STALE_START,0);
             else
             {
-                State.Running=1;State.Fault=CHASSIS_TEST_OK;State.FaultWheel=0;Started=RequestTick;
-                for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)LastMovement[i]=Now;
+                State.Running=1;State.Fault=CHASSIS_TEST_OK;State.FaultWheel=0;
+                State.Paused=State.Completed=0;
+                State.ActivePreset=Preset==CHASSIS_TEST_AUTO?CHASSIS_TEST_FORWARD:Preset;
+                BeginMotion(Now);
             }
         }
-        if(State.Running && !Start)
+        uint8_t NewMotion=Start;
+        if(State.Running && Preset==CHASSIS_TEST_AUTO)
+        {
+            if(State.Paused && (uint32_t)(Now-PhaseTick)>=ROBOT_CHASSIS_TEST_AUTO_PAUSE_MS)
+            {
+                State.Paused=0;
+                State.ActivePreset=(ChassisTest_Preset)(State.ActivePreset+1U);
+                BeginMotion(Now);NewMotion=1;
+            }
+            else if(!State.Paused && (uint32_t)(Now-PhaseTick)>=ROBOT_CHASSIS_TEST_AUTO_RUN_MS)
+            {
+                if(State.ActivePreset==CHASSIS_TEST_CW)
+                {Halt(CHASSIS_TEST_OK,0);State.Completed=1;}
+                else {State.Paused=1;PhaseTick=Now;}
+            }
+        }
+        if(State.Running && !State.Paused && !NewMotion)
         {
             for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
             {
@@ -123,15 +151,15 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
             }
         }
     }
-    if(State.Running)
+    if(State.Running && !State.Paused)
     {
         Command->Enabled=1;
-        if(State.Preset>=CHASSIS_TEST_M1)
+        if(State.ActivePreset>=CHASSIS_TEST_M1 && State.ActivePreset<=CHASSIS_TEST_M4)
         {
             Command->Mode=ROBOT_COMMAND_WHEELS;
-            Command->Target.Wheels[State.Preset-CHASSIS_TEST_M1]=ROBOT_CHASSIS_TEST_SPEED_MPS;
+            Command->Target.Wheels[State.ActivePreset-CHASSIS_TEST_M1]=ROBOT_CHASSIS_TEST_SPEED_MPS;
         }
-        else switch(State.Preset)
+        else switch(State.ActivePreset)
         {
         case CHASSIS_TEST_FORWARD:Command->Target.Velocity.Vx=ROBOT_CHASSIS_TEST_SPEED_MPS;break;
         case CHASSIS_TEST_BACKWARD:Command->Target.Velocity.Vx=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
@@ -139,6 +167,10 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
         case CHASSIS_TEST_RIGHT:Command->Target.Velocity.Vy=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
         case CHASSIS_TEST_CCW:Command->Target.Velocity.Wz=ROBOT_CHASSIS_TEST_TURN_RADPS;break;
         case CHASSIS_TEST_CW:Command->Target.Velocity.Wz=-ROBOT_CHASSIS_TEST_TURN_RADPS;break;
+        case CHASSIS_TEST_CIRCLE_CCW:
+            Command->Target.Velocity.Vx=ROBOT_CHASSIS_TEST_SPEED_MPS;
+            Command->Target.Velocity.Wz=ROBOT_CHASSIS_TEST_SPEED_MPS/ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M;
+            break;
         default:Halt(CHASSIS_TEST_BAD_SAMPLE,0);Command->Enabled=0;break;
         }
     }
