@@ -57,7 +57,7 @@ ChassisTest_Status ChassisTest_GetStatus(void)
 }
 static void Halt(ChassisTest_Fault Fault,uint8_t Wheel)
 {
-    State.Running=0;State.RemainingMs=0;State.Fault=Fault;State.FaultWheel=Wheel;
+    State.Running=0;State.Fault=Fault;State.FaultWheel=Wheel;
 }
 static void Publish(void)
 {
@@ -109,8 +109,6 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
                 for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)LastMovement[i]=Now;
             }
         }
-        if(State.Running && (uint32_t)(Now-Started)>=ROBOT_CHASSIS_TEST_DURATION_MS)
-            Halt(CHASSIS_TEST_OK,0);
         if(State.Running && !Start)
         {
             for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
@@ -127,7 +125,6 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
     }
     if(State.Running)
     {
-        State.RemainingMs=ROBOT_CHASSIS_TEST_DURATION_MS-(uint32_t)(Now-Started);
         Command->Enabled=1;
         if(State.Preset>=CHASSIS_TEST_M1)
         {

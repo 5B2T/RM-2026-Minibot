@@ -187,10 +187,8 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
     {
         const ChassisTest_Status *Test=&Status->ChassisTest;
         unsigned Preset=(unsigned)Test->Preset<CHASSIS_TEST_COUNT?(unsigned)Test->Preset:0;
-        uint32_t Remaining=Test->Running?Test->RemainingMs:ROBOT_CHASSIS_TEST_DURATION_MS;
         Line(0,"CHASSIS TEST  MM/S");
-        (void)snprintf(Text,sizeof(Text),"%s %s %lu.%luS",TestNames[Preset],Test->Running?"RUN":"STOP",
-            (unsigned long)(Remaining/1000U),(unsigned long)(Remaining%1000U/100U));
+        (void)snprintf(Text,sizeof(Text),"%s %s",TestNames[Preset],Test->Running?"RUN":"STOP");
         Line(1,Text);
         for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
         {
@@ -207,7 +205,7 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             Test->Fault==CHASSIS_TEST_REMOTE_STOP?"REMOTE STOP":
             Test->Fault==CHASSIS_TEST_BAD_SAMPLE?"SAMPLE ERROR":
             Test->Fault==CHASSIS_TEST_STALE_START?"START EXPIRED":"PA15:NEXT SET/ACT");
-        Line(7,"PE6:RUN HOLD:BACK");
+        Line(7,Test->Running?"PE6:STOP HOLD:BACK":"PE6:RUN HOLD:BACK");
         return;
     }
     else if(View.Page==DEBUG_PAGE_STATUS)

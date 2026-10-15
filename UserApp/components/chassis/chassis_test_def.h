@@ -12,7 +12,6 @@ typedef enum {
     CHASSIS_TEST_STALE_START
 } ChassisTest_Fault;
 typedef struct {
-    uint32_t RemainingMs;
     ChassisTest_Preset Preset;
     ChassisTest_Fault Fault;
     uint8_t Visible,Running,FaultWheel; // FaultWheel = physical M1..M4, zero if unrelated.
