@@ -17,6 +17,7 @@ typedef struct
     uint8_t ResumePending;
     uint8_t SequenceKnown;
     uint8_t Sequence;
+    uint32_t StopGeneration;
 }RemoteControl_StateTypeDef;
 
 static RemoteControl_StateTypeDef RemoteControl_State;
@@ -94,6 +95,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
 
     if(Stop)
     {
+        RemoteControl_State.StopGeneration++;
         RemoteControl_State.Armed=0;
         RemoteControl_State.MotionValid=0;
         RemoteControl_State.StopPending=1;
@@ -156,6 +158,7 @@ RemoteControl_LinkStatus RemoteControl_GetLinkStatus(void)
         BSP_TimeMs()-RemoteControl_State.LastRxTick<ROBOT_REMOTE_TIMEOUT_MS;
     RemoteControl_LinkStatus Status={
         .LastRxTick=RemoteControl_State.LastRxTick,
+        .StopGeneration=RemoteControl_State.StopGeneration,
         .Connected=Connected,
         .Armed=Connected && RemoteControl_State.Armed && !RemoteControl_State.StopPending};
     taskEXIT_CRITICAL();

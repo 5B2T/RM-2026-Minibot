@@ -1,7 +1,7 @@
 #ifndef DEBUG_DISPLAY_H
 #define DEBUG_DISPLAY_H
 #include "robot/robot_def.h"
-typedef enum {DEBUG_PAGE_STATUS=0,DEBUG_PAGE_SPEED,DEBUG_PAGE_PWM,DEBUG_PAGE_POWER,DEBUG_PAGE_COUNT} DebugDisplay_Page;
+typedef enum {DEBUG_PAGE_STATUS=0,DEBUG_PAGE_SPEED,DEBUG_PAGE_PWM,DEBUG_PAGE_POWER,DEBUG_PAGE_CHASSIS_TEST,DEBUG_PAGE_COUNT} DebugDisplay_Page;
 // Display task owns initialization, rendering and transfers. Returns next delay in ms.
 uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs);
 void DebugDisplay_Init(void); // Software reset before scheduler start.

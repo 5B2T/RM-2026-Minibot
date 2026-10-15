@@ -59,6 +59,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Modules/wheel/speed.c
     Modules/wheel/motor_control.c
     UserApp/components/chassis/chassis.c
+    UserApp/components/chassis/chassis_test.c
     UserApp/components/command/remote_control.c
     UserApp/components/display/debug_display.c
     UserApp/components/power/power_monitor.c

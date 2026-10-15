@@ -1,6 +1,7 @@
 #include "robot/robot.h"
 #include "robot/robot_config.h"
 #include "components/chassis/chassis.h"
+#include "components/chassis/chassis_test.h"
 #include "components/command/remote_control.h"
 #include "motor/bsp_motor.h"
 #include "encoder/bsp_encoder.h"
@@ -31,6 +32,7 @@ uint8_t Robot_Init(void)
     memset(&ArmMailbox,0,sizeof(ArmMailbox));
     ArmRemoteWasArmed=0;
     RemoteControl_Init();
+    ChassisTest_Init();
     PowerMonitor_Init();
     DebugDisplay_Init();
     DisplayScheduled=0;
@@ -88,21 +90,26 @@ static void ArmControlStep(float DtS,uint32_t NowMs,RemoteControl_LinkStatus Lin
 void Robot_ControlStep(float DtS)
 {
     if(!Ready) {BSP_Motor_Disable();Arm_Stop();return;}
-    Robot_ChassisCommand Command;
-    if(!Chassis_Measure(DtS))Chassis_Stop();
-    else
-    {
-        RemoteControl_GetCommand(&Command);
-        Chassis_Control(&Command, DtS);
-    }
+    Robot_ChassisCommand Command,RemoteCommand;
+    uint8_t SampleValid=Chassis_Measure(DtS);
+    RemoteControl_GetCommand(&RemoteCommand);
+    RemoteControl_LinkStatus Link=RemoteControl_GetLinkStatus();
+    Robot_Status Feedback={0};Chassis_GetFeedback(&Feedback);
+    uint8_t TestSample=SampleValid && DtS>0 && DtS<=0.1f;
+    if(!ChassisTest_Control(&Command,&Feedback,TestSample,BSP_TimeMs(),Link.StopGeneration,Link.Connected))
+        Command=RemoteCommand;
+    if(ChassisTest_TakeRelease())RemoteControl_Disconnect(); // Require explicit radio recovery after local testing.
+    if(!SampleValid)Chassis_Stop();
+    else Chassis_Control(&Command,DtS);
     Robot_Status Status={0};
     Chassis_GetFeedback(&Status);
     Status.TickMs=BSP_TimeMs();
-    RemoteControl_LinkStatus Link=RemoteControl_GetLinkStatus();
+    Link=RemoteControl_GetLinkStatus();
     ArmControlStep(DtS,Status.TickMs,Link);
     Status.Arm=Arm_GetStatus();
     Status.Connected=Link.Connected;
     Status.Armed=Link.Armed;
+    Status.ChassisTest=ChassisTest_GetStatus();
     taskENTER_CRITICAL();
     StatusSnapshot=Status;
     taskEXIT_CRITICAL();
@@ -147,6 +154,8 @@ uint32_t Robot_DisplayStep(void)
     uint32_t NowMs=BSP_TimeMs();
     uint8_t Keys=BSP_Buttons_Read();
     DebugDisplay_HandleKeys((Keys&BSP_BUTTON_NEXT)!=0,(Keys&BSP_BUTTON_BACK)!=0,NowMs);
+    DebugDisplay_State View=DebugDisplay_GetState();
+    ChassisTest_View(!View.MainMenu && View.Page==DEBUG_PAGE_CHASSIS_TEST,View.Online,NowMs);
     PowerMonitor_Step(NowMs);
     if(DisplayScheduled && (uint32_t)(NowMs-DisplayTick)<DisplayDelay)return ROBOT_DISPLAY_POLL_MS;
     Robot_Status Status;

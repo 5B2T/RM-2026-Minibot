@@ -12,6 +12,7 @@ void RemoteControl_GetCommand(Robot_ChassisCommand *Command); // Control owner, 
 typedef struct
 {
     uint32_t LastRxTick;
+    uint32_t StopGeneration; // Advances for every valid radio STOP, including stale sequences.
     uint8_t Connected;
     uint8_t Armed;
 } RemoteControl_LinkStatus;
