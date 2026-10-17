@@ -9,22 +9,18 @@ static uint8_t Rx[INPUT_LINK_SIZE],Mailbox[INPUT_LINK_SIZE];
 static volatile uint8_t MailPending,Rearm;
 static volatile uint32_t MailTick;
 static volatile uint8_t Receiving;
-static uint8_t HaveSequence,LastSequence;
 static volatile uint32_t ReceiveTick;
 static uint32_t RetryTick;
-static Remote_Input Snapshot;
+static InputLink_Receiver Receiver;
 volatile uint32_t ArmBoard_RxCount,ArmBoard_Errors;
+static char Tx[512];
+static uint16_t TxRead,TxWrite;
 static uint32_t Lock(void)
 {uint32_t Mask=__get_PRIMASK();__disable_irq();return Mask;}
 static void Unlock(uint32_t Mask){__set_PRIMASK(Mask);}
 void ArmBoard_Print(const char *Text)
 {
- uint32_t Started=HAL_GetTick();
- while(*Text)
- {
-  while(!(USART1->SR&USART_SR_TXE))if((uint32_t)(HAL_GetTick()-Started)>=30U)return;
-  USART1->DR=(uint8_t)*Text++;
- }
+ while(*Text){uint16_t Next=(TxWrite+1U)%sizeof(Tx);if(Next==TxRead)return;Tx[TxWrite]=*Text++;TxWrite=Next;}
 }
 static void Listen(void)
 {
@@ -65,6 +61,8 @@ static void ConfigureLink(void)
 }
 void ArmBoard_Init(void)
 {
+ memset(&Receiver,0,sizeof(Receiver));MailPending=Rearm=Receiving=0;
+ ArmBoard_RxCount=ArmBoard_Errors=0;TxRead=TxWrite=0;
  __HAL_RCC_GPIOA_CLK_ENABLE();__HAL_RCC_GPIOB_CLK_ENABLE();
  __HAL_RCC_AFIO_CLK_ENABLE();__HAL_RCC_I2C1_CLK_ENABLE();
  __HAL_RCC_SPI2_CLK_ENABLE();__HAL_RCC_ADC1_CLK_ENABLE();__HAL_RCC_USART1_CLK_ENABLE();
@@ -100,6 +98,8 @@ void ArmBoard_Init(void)
 }
 void ArmBoard_Service(void)
 {
+ for(unsigned i=0;i<16 && TxRead!=TxWrite && (USART1->SR&USART_SR_TXE);i++)
+ {USART1->DR=(uint8_t)Tx[TxRead];TxRead=(TxRead+1U)%sizeof(Tx);}
  uint32_t Now=HAL_GetTick();
  if(Receiving && (uint32_t)(Now-ReceiveTick)>=15U)Rearm=1;
  if(Rearm && (uint32_t)(Now-RetryTick)>=20U)
@@ -114,21 +114,15 @@ void ArmBoard_Service(void)
  uint32_t Mask=Lock();
  if(!MailPending){Unlock(Mask);return;}
  memcpy(Data,Mailbox,sizeof(Data));Tick=MailTick;MailPending=0;Unlock(Mask);
- if(Data[0]!=0xa6 || Data[1]!=1 || Data[3]>1 ||
-    InputLink_CRC(Data,18)!=InputLink_Get(Data+18) || (InputLink_Get(Data+4)&0xf000U))
- {ArmBoard_Errors++;return;}
- uint8_t Difference=(uint8_t)(Data[2]-LastSequence);
- if(HaveSequence && (uint32_t)(Tick-Snapshot.TickMs)<100U && (Difference==0 || Difference>127))return;
- Remote_Input Next={.TickMs=Tick,.Keys=InputLink_Get(Data+4),.Valid=Data[3]};
- for(uint8_t t=0;t<5;t++)
- {Next.ADC[t]=InputLink_Get(Data+6+t*2);if(Next.ADC[t]>4095){ArmBoard_Errors++;return;}}
- Snapshot=Next;HaveSequence=1;LastSequence=Data[2];ArmBoard_RxCount++;
+ int8_t Result=InputLink_Receive(&Receiver,Data,sizeof(Data),Tick);
+ if(Result<0)ArmBoard_Errors++;
+ else if(Result>0)ArmBoard_RxCount++;
 }
 Remote_Input ArmBoard_Input(uint32_t Now)
 {
- Remote_Input Input=Snapshot;
- Input.Valid=Input.Valid && HaveSequence && (uint32_t)(Now-Input.TickMs)<30U;
- if(!Input.Valid)Input.Keys=0;
+ InputLink_Frame Frame=InputLink_Read(&Receiver,Now);
+ Remote_Input Input={.TickMs=Receiver.TickMs,.Keys=Frame.Keys,.Valid=Frame.Valid};
+ memcpy(Input.ADC,Frame.ADC,sizeof(Input.ADC));
  return Input;
 }
 uint8_t ArmBoard_Pots(uint16_t Values[5])

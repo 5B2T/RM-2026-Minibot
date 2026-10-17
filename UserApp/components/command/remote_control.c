@@ -18,6 +18,8 @@ typedef struct
     uint8_t SequenceKnown;
     uint8_t Sequence;
     uint32_t StopGeneration;
+    RemoteControl_ArmInput Arm;
+    uint8_t DeployCounter,GripperCounter;
 }RemoteControl_StateTypeDef;
 
 static RemoteControl_StateTypeDef RemoteControl_State;
@@ -33,6 +35,7 @@ static void RemoteControl_ClearConnection(void)
     RemoteControl_State.SequenceKnown=0;
     RemoteControl_State.Mode=ROBOT_COMMAND_WHEELS;
     memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
+    memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
 }
 
 void RemoteControl_Disconnect(void)
@@ -72,7 +75,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
                      (float)Frame.M3/REMOTE_CONTROL_SPEED_SCALE,
                      (float)Frame.M4/REMOTE_CONTROL_SPEED_SCALE};
 
-    if(Frame.Version==REMOTE_CONTROL_VERSION_VELOCITY)Target[2]=(float)Frame.M3/REMOTE_CONTROL_ANGULAR_SCALE;
+    if(Frame.Version!=REMOTE_CONTROL_VERSION_WHEELS)Target[2]=(float)Frame.M3/REMOTE_CONTROL_ANGULAR_SCALE;
 
     taskENTER_CRITICAL();
     uint32_t Now=BSP_TimeMs();
@@ -101,9 +104,13 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
         RemoteControl_State.StopPending=1;
         RemoteControl_State.ResumePending=0;
         memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
+        memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
     }
     else if(Resume)
     {
+        memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
+        RemoteControl_State.DeployCounter=Frame.Reserved[3];
+        RemoteControl_State.GripperCounter=Frame.Reserved[4];
         RemoteControl_State.MotionValid=0;
         memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
         if(RemoteControl_State.StopPending)RemoteControl_State.ResumePending=1;
@@ -111,10 +118,23 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     }
     else if(RemoteControl_State.Armed)
     {
-        RemoteControl_State.Mode=Frame.Version==REMOTE_CONTROL_VERSION_VELOCITY?
+        RemoteControl_State.Mode=Frame.Version!=REMOTE_CONTROL_VERSION_WHEELS?
                                   ROBOT_COMMAND_VELOCITY:ROBOT_COMMAND_WHEELS;
         memcpy(RemoteControl_State.Target, Target, sizeof(Target));
         RemoteControl_State.MotionValid=1;
+        if(Frame.Version==REMOTE_CONTROL_VERSION_ROBOT)
+        {
+            RemoteControl_ArmInput *Arm=&RemoteControl_State.Arm;
+            Arm->Enabled=1;Arm->Joint=Frame.Reserved[0];Arm->Base=Target[3];
+            int32_t Rate=(uint16_t)Frame.Reserved[1]|((uint16_t)Frame.Reserved[2]<<8);
+            if(Rate>=32768)Rate-=65536;
+            Arm->Rate=(float)Rate/1000.0f;
+            if(Frame.Reserved[3]!=RemoteControl_State.DeployCounter)Arm->Initialize=1;
+            if(Frame.Reserved[4]!=RemoteControl_State.GripperCounter)Arm->Gripper=1;
+            RemoteControl_State.DeployCounter=Frame.Reserved[3];
+            RemoteControl_State.GripperCounter=Frame.Reserved[4];
+        }
+        else memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
     }
     taskEXIT_CRITICAL();
     return 1;
@@ -163,4 +183,15 @@ RemoteControl_LinkStatus RemoteControl_GetLinkStatus(void)
         .Armed=Connected && RemoteControl_State.Armed && !RemoteControl_State.StopPending};
     taskEXIT_CRITICAL();
     return Status;
+}
+RemoteControl_ArmInput RemoteControl_TakeArmInput(void)
+{
+    taskENTER_CRITICAL();
+    RemoteControl_Expire(BSP_TimeMs());
+    RemoteControl_ArmInput Input=RemoteControl_State.Arm;
+    Input.Enabled=Input.Enabled && RemoteControl_State.HasFrame && RemoteControl_State.Armed &&
+                  RemoteControl_State.MotionValid && !RemoteControl_State.StopPending;
+    RemoteControl_State.Arm.Initialize=RemoteControl_State.Arm.Gripper=0;
+    taskEXIT_CRITICAL();
+    return Input;
 }

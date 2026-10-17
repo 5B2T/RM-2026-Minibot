@@ -2,16 +2,17 @@
 #define ROBOT_CONFIG_H
 // Current F407 car configuration. Sizes/units must not be copied from school hardware.
 #define ROBOT_CONTROL_PERIOD_MS 10U
-#define ROBOT_CHASSIS_TEST_SPEED_MPS 0.10f
-#define ROBOT_CHASSIS_TEST_TURN_RADPS 0.4f
-// Body-center path radius; +Vx and +Wz circle around a point to the left.
-#define ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M 0.50f
+// Default car speeds; user confirmed floor-test performance on 2026-10-16.
+#define ROBOT_DEFAULT_LINEAR_SPEED_MPS 0.54f
+#define ROBOT_DEFAULT_TURN_RADPS 1.8f
+#define ROBOT_CHASSIS_TEST_SPEED_MPS ROBOT_DEFAULT_LINEAR_SPEED_MPS
+#define ROBOT_CHASSIS_TEST_TURN_RADPS ROBOT_DEFAULT_TURN_RADPS
 #define ROBOT_CHASSIS_TEST_UI_TIMEOUT_MS 100U
 #define ROBOT_CHASSIS_TEST_NO_ENCODER_MS 500U
 #define ROBOT_CHASSIS_TEST_BACK_HOLD_MS 1000U
 #define ROBOT_CHASSIS_TEST_REFRESH_MS 100U
-#define ROBOT_CHASSIS_TEST_AUTO_RUN_MS 1000U
-#define ROBOT_CHASSIS_TEST_AUTO_PAUSE_MS 1000U
+#define ROBOT_CHASSIS_TEST_SQUARE_SIDE_MS 1000U
+#define ROBOT_CHASSIS_TEST_SQUARE_LAPS 2U
 #define ROBOT_COMM_POLL_MS 5U
 #define ROBOT_RADIO_RETRY_MS 100U
 #define ROBOT_REMOTE_TIMEOUT_MS 100U
@@ -26,10 +27,11 @@
 // Replacement M2 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
 // M3/M4 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
 // M1 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
-// Floor load and the full 0.5 m/s limit remain unverified.
+// Higher-speed closed-loop operation and floor load require validation.
 #define ROBOT_SPEED_KP_BY_CHANNEL {1600.0f,ROBOT_SPEED_KP,1200.0f,1600.0f}
 #define ROBOT_SPEED_KI_BY_CHANNEL {20000.0f,16000.0f,16000.0f,20000.0f}
-#define ROBOT_WHEEL_SPEED_LIMIT_MPS 0.5f
+// M1 suspended open-loop: PWM 750 gave ~0.537 m/s; other wheels/load pending.
+#define ROBOT_WHEEL_SPEED_LIMIT_MPS 0.54f
 // Body axes: +x forward, +y left, +wz counterclockwise viewed from above.
 // Positive wheel speed means that wheel drives the vehicle forward.
 // Front is at the bottom of the supplied sketch: FL bottom-right, FR bottom-left,
@@ -57,12 +59,30 @@
 // J1 shoulder, J2 elbow, J3 wrist pitch, J4 wrist roll, J5 gripper.
 // These endpoints/directions/neutral pulses are provisional, not board calibration.
 #define ROBOT_ARM_SERVO_CONFIG { \
-    {SERVO_POSITION,500,1500,2500,295.0f,1}, \
-    {SERVO_CONTINUOUS,500,1500,2500,0,1}, \
+    {SERVO_POSITION,500,1500,2500,300.0f,-1}, \
+    {SERVO_CONTINUOUS,500,1500,2500,0,-1}, \
     {SERVO_CONTINUOUS,500,1500,2500,0,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1} }
-#define ROBOT_ARM_PRESET_DEG {147.5f,0,0,90.0f,90.0f}
+// J1 commands/telemetry: new 0 = old 150 (servo 150), new 150 = old 0 (servo 300).
+// This fixed mechanical zero is not changed by ARM ZERO.
+#define ROBOT_ARM_SHOULDER_ZERO_DEG 150.0f
+#define ROBOT_ARM_SHOULDER_POSITION_MAX_DEG 150.0f
+#define ROBOT_ARM_GRIPPER_CLOSED_DEG 0.0f
+#define ROBOT_ARM_GRIPPER_OPEN_DEG 45.0f
+// Continuous servo RATE remains a normalized PWM command, not measured speed.
+#define ROBOT_ARM_ELBOW_RATE_LIMIT 0.15f
+#define ROBOT_ARM_WRIST_PITCH_RATE_LIMIT 0.14f
+// User references: J2 ~90 deg/s at 0.15; J3 ~180 deg/s at 0.14 (2026-10-17).
+// Reference only; lower RATE values and different loads require calibration.
+#define ROBOT_ARM_ELBOW_REFERENCE_DPS 90.0f
+#define ROBOT_ARM_WRIST_PITCH_REFERENCE_DPS 180.0f
+#define ROBOT_ARM_INIT_SHOULDER_DEG 90.0f
+#define ROBOT_ARM_INIT_ELBOW_DEG 90.0f
+#define ROBOT_ARM_INIT_WRIST_PITCH_DEG 270.0f
+#define ROBOT_ARM_SEQUENCE_SETTLE_MS 200U
+#define ROBOT_ARM_SEQUENCE_MAX_MS 10000U
+#define ROBOT_ARM_PRESET_DEG {0,0,0,90.0f,ROBOT_ARM_GRIPPER_CLOSED_DEG}
 #define ROBOT_ARM_POSITION_RATE_DPS 90.0f
 #define ROBOT_ARM_COMMAND_MAX_MS 5000U
 #define ROBOT_ARM_DEBUG_TIMEOUT_MS 300U

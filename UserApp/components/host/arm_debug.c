@@ -69,6 +69,8 @@ static void Handle(const ArmDebug_Command *Input,uint32_t Now)
     case ARM_DEBUG_RATE:Command.Action=ARM_RATE;break;
     case ARM_DEBUG_PRESET:Command.Action=ARM_PRESET;break;
     case ARM_DEBUG_NEUTRAL:Command.Action=ARM_NEUTRAL;break;
+    case ARM_DEBUG_ZERO:Command.Action=ARM_ZERO;break;
+    case ARM_DEBUG_INITIALIZE:Command.Action=ARM_INITIALIZE;break;
     default:Reject("ERR SYNTAX\r\n");return;
     }
     if(!Arm_CommandValid(&Command)) {Reject("ERR RANGE\r\n");return;}
