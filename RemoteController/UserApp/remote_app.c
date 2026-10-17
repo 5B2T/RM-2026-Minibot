@@ -1,21 +1,27 @@
 #include "remote_app.h"
-#include "remote_config.h"
 #include "input/bsp_input.h"
-#include "control/remote_control.h"
-#include "components/radio/remote_radio.h"
-#include "components/display/remote_display.h"
-#include "time/bsp_time.h"
+#include "i2c/bsp_soft_i2c.h"
+#include "command/input_link.h"
 #include "main.h"
-static uint32_t DisplayTick;
+#include "test.h"
+static uint32_t SendTick;
+static uint8_t Sequence;
 void RemoteApp_Init(void)
-{Controller_Init();BSP_InputInit();RemoteRadio_Init(BSP_TimeMs());DisplayTick=BSP_TimeMs();}
+{
+ Test_Init();
+ SendTick=HAL_GetTick()-20U;Sequence=0;
+}
 void RemoteApp_Step(void)
 {
- BSP_InputStep(BSP_TimeMs());Remote_Input Input=BSP_InputRead(BSP_TimeMs());
- Controller_Update(&Input,BSP_TimeMs());RemoteRadio_Step(BSP_TimeMs());
- Remote_Status s=Controller_GetStatus();
- // Active-low LEDs show local TX authorization and radio ACK, never car execution.
- HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,s.LinkAck?GPIO_PIN_RESET:GPIO_PIN_SET);
- HAL_GPIO_WritePin(GPIOB,GPIO_PIN_5,s.Mode==REMOTE_ACTIVE?GPIO_PIN_RESET:GPIO_PIN_SET);
- if((uint32_t)(BSP_TimeMs()-DisplayTick)>=5){RemoteDisplay_Step(BSP_TimeMs());DisplayTick=BSP_TimeMs();}
+ Test_Step();
+ uint32_t Now=HAL_GetTick();
+ if((uint32_t)(Now-SendTick)<20U)return;
+ SendTick=Now;
+ Remote_Input Input=BSP_InputRead(Now);
+ uint8_t Data[INPUT_LINK_SIZE]={0xa6,1,Sequence++,Input.Valid};
+ InputLink_Put(Data+4,Input.Keys);
+ for(uint8_t t=0;t<5;t++)InputLink_Put(Data+6+t*2,Input.ADC[t]);
+ InputLink_Put(Data+18,InputLink_CRC(Data,18));
+ uint8_t OK=BSP_SoftI2C_Write(INPUT_LINK_ADDRESS,Data,sizeof(Data));
+ HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,OK?GPIO_PIN_RESET:GPIO_PIN_SET);
 }

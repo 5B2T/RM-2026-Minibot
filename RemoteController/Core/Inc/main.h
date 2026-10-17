@@ -75,9 +75,9 @@ void Error_Handler(void);
 #define RADIO_CE_GPIO_Port GPIOB
 #define KEY_LEFTROCKER_Pin GPIO_PIN_8
 #define KEY_LEFTROCKER_GPIO_Port GPIOA
-#define KEY_DOWN_Pin GPIO_PIN_11
+#define KEY_DOWN_Pin GPIO_PIN_12
 #define KEY_DOWN_GPIO_Port GPIOA
-#define KEY_UP_Pin GPIO_PIN_12
+#define KEY_UP_Pin GPIO_PIN_11
 #define KEY_UP_GPIO_Port GPIOA
 #define KEY_LEFT_Pin GPIO_PIN_15
 #define KEY_LEFT_GPIO_Port GPIOA

@@ -69,12 +69,12 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
 # Reuse chip-independent radio/protocol/display sources with F103 BSP adapters.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
- Bsp/input/bsp_input.c Bsp/radio/bsp_nrf24l01.c Bsp/time/bsp_time.c Bsp/i2c/bsp_soft_i2c.c
- Modules/control/remote_control.c UserApp/remote_app.c
- UserApp/components/radio/remote_radio.c UserApp/components/display/remote_display.c
- ../Modules/radio/nrf24l01.c ../Modules/command/command_protocol.c ../Modules/display/oled.c)
+ Bsp/input/bsp_input.c Bsp/time/bsp_time.c Bsp/i2c/bsp_soft_i2c.c
+ UserApp/remote_app.c)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE Bsp Modules UserApp ../Bsp ../Modules)
 target_link_libraries(${CMAKE_PROJECT_NAME} m)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+ UserApp/test.c)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
  COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.hex
  COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_PROJECT_NAME}.bin)

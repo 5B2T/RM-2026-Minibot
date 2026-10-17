@@ -4,14 +4,20 @@
 #define SCL GPIO_PIN_5
 #define SDA GPIO_PIN_7
 static uint32_t Started;
-static void Set(uint16_t Pin,uint8_t High){HAL_GPIO_WritePin(GPIOA,Pin,High?GPIO_PIN_SET:GPIO_PIN_RESET);}
+static void Set(uint16_t Pin,uint8_t High)
+{
+ uint32_t Shift=Pin==SCL?20U:28U;
+ if(High)GPIOA->BSRR=Pin;
+ else GPIOA->BRR=Pin;
+ MODIFY_REG(GPIOA->CRL,0xfU<<Shift,(High?0x8U:0x7U)<<Shift);
+}
 static uint8_t Read(uint16_t Pin){return HAL_GPIO_ReadPin(GPIOA,Pin)==GPIO_PIN_SET;}
-static void Delay(void){uint32_t n=DWT->CYCCNT;while((uint32_t)(DWT->CYCCNT-n)<SystemCoreClock/250000U){} }
+static void Delay(void){uint32_t n=DWT->CYCCNT;while((uint32_t)(DWT->CYCCNT-n)<SystemCoreClock/40000U){} }
 static uint8_t ClockHigh(void)
 {
  Set(SCL,1);uint32_t n=DWT->CYCCNT;
- while(!Read(SCL))if((uint32_t)(DWT->CYCCNT-n)>=SystemCoreClock/10000U)return 0;
- Delay();return (uint32_t)(HAL_GetTick()-Started)<5;
+ while(!Read(SCL))if((uint32_t)(DWT->CYCCNT-n)>=SystemCoreClock/1000U)return 0;
+ Delay();return (uint32_t)(HAL_GetTick()-Started)<14;
 }
 static uint8_t Stop(void)
 {
