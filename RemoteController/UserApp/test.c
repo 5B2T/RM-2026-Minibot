@@ -4,21 +4,27 @@
 #include "remote_config.h"
 #include <stdio.h>
 static uint16_t RawKeys,StableKeys;
-static uint32_t KeyTick;
+static uint32_t KeyTick,TxFaults;
 static uint8_t Validity=2;
 static const char *KeyNames[KEY_COUNT]={
  "LEFT_UP PA11","LEFT_DOWN PA12","LEFT_LEFT PA15","LEFT_RIGHT PB3",
  "KEY_A PB6","KEY_A_PLUS PB7","KEY_B PB8","KEY_B_PLUS PB9",
  "LEFT_ROCKER PA8","RIGHT_ROCKER PC15","KEY_1 PC14","WAUP PA0"};
-static void Send(const char *Text)
+// Printing is diagnostic only: a stalled UART must never block the input bridge or stop the board.
+// After TEST_TX_FAULT_LIMIT consecutive timeouts the printer gives up instead of retrying forever.
+#define TEST_TX_FAULT_LIMIT 4U
+static uint8_t Send(const char *Text)
 {
  uint32_t Started=HAL_GetTick();
+ if(TxFaults>=TEST_TX_FAULT_LIMIT)return 0;
  while(*Text)
  {
-  while(!(USART1->SR&USART_SR_TXE))if((uint32_t)(HAL_GetTick()-Started)>=50U)Error_Handler();
+  while(!(USART1->SR&USART_SR_TXE))if((uint32_t)(HAL_GetTick()-Started)>=50U){TxFaults++;return 0;}
   USART1->DR=(uint8_t)*Text++;
  }
- while(!(USART1->SR&USART_SR_TC))if((uint32_t)(HAL_GetTick()-Started)>=50U)Error_Handler();
+ while(!(USART1->SR&USART_SR_TC))if((uint32_t)(HAL_GetTick()-Started)>=50U){TxFaults++;return 0;}
+ TxFaults=0;
+ return 1;
 }
 void Test_Init(void)
 {
@@ -42,7 +48,7 @@ void Test_Init(void)
  RawKeys=StableKeys=0;
  KeyTick=HAL_GetTick();
  Validity=2;
- Send("\r\nCHIP1 INPUT BRIDGE | USART1 115200 8N1\r\nI2C MASTER PA5/PA7 ADDR 0x32 | OLED REMOVED | NO RADIO\r\n");
+ (void)Send("\r\nCHIP1 INPUT BRIDGE | USART1 115200 8N1\r\nI2C MASTER PA5/PA7 ADDR 0x32 | OLED REMOVED | NO RADIO\r\n");
 }
 void Test_Step(void)
 {
@@ -58,12 +64,12 @@ void Test_Step(void)
   for(uint8_t t=0;t<KEY_COUNT;t++)if(Changed&KEY_MASK(t))
   {
    (void)snprintf(Text,sizeof(Text),"KEY %s %s\r\n",KeyNames[t],StableKeys&KEY_MASK(t)?"DOWN":"UP");
-   Send(Text);
+   if(!Send(Text))return;
   }
  }
  if(Input.Valid!=Validity)
  {
   Validity=Input.Valid;
-  Send(Validity?"ADC VALID\r\n":"ADC INVALID\r\n");
+  (void)Send(Validity?"ADC VALID\r\n":"ADC INVALID\r\n");
  }
 }

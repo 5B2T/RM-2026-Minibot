@@ -26,9 +26,9 @@ void ArmBoard_Print(const char *Text)
   USART1->DR=(uint8_t)*Text++;
  }
 }
-static void Listen(void)
+static uint8_t Listen(void)
 {
- if(HAL_I2C_EnableListen_IT(&Link)!=HAL_OK)Rearm=1;
+ return HAL_I2C_EnableListen_IT(&Link)==HAL_OK;
 }
 void HAL_I2C_AddrCallback(I2C_HandleTypeDef *I2C,uint8_t Direction,uint16_t Address)
 {
@@ -45,12 +45,12 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *I2C)
  memcpy(Mailbox,Rx,sizeof(Rx));MailTick=HAL_GetTick();MailPending=1;
 }
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *I2C)
-{if(I2C==&Link){Receiving=0;Listen();}}
+{if(I2C==&Link){Receiving=0;if(!Listen())Rearm=1;}}
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *I2C)
 {if(I2C==&Link){ArmBoard_Errors++;Receiving=0;Rearm=1;}}
 void I2C1_EV_IRQHandler(void){HAL_I2C_EV_IRQHandler(&Link);}
 void I2C1_ER_IRQHandler(void){HAL_I2C_ER_IRQHandler(&Link);}
-static void ConfigureLink(void)
+static uint8_t ConfigureLink(void)
 {
  Link.Instance=I2C1;
  Link.Init.ClockSpeed=100000;
@@ -60,8 +60,8 @@ static void ConfigureLink(void)
  Link.Init.DualAddressMode=I2C_DUALADDRESS_DISABLE;
  Link.Init.GeneralCallMode=I2C_GENERALCALL_DISABLE;
  Link.Init.NoStretchMode=I2C_NOSTRETCH_DISABLE;
- if(HAL_I2C_Init(&Link)!=HAL_OK)Error_Handler();
- Listen();
+ if(HAL_I2C_Init(&Link)!=HAL_OK)return 0;
+ return Listen();
 }
 void ArmBoard_Init(void)
 {
@@ -88,15 +88,16 @@ void ArmBoard_Init(void)
  hspi2.Init.NSS=SPI_NSS_SOFT;hspi2.Init.BaudRatePrescaler=SPI_BAUDRATEPRESCALER_8;
  hspi2.Init.FirstBit=SPI_FIRSTBIT_MSB;hspi2.Init.TIMode=SPI_TIMODE_DISABLE;
  hspi2.Init.CRCCalculation=SPI_CRCCALCULATION_DISABLE;hspi2.Init.CRCPolynomial=7;
- if(HAL_SPI_Init(&hspi2)!=HAL_OK)Error_Handler();
+ if(HAL_SPI_Init(&hspi2)!=HAL_OK)ArmBoard_Errors++;
  __HAL_RCC_ADC_CONFIG(RCC_ADCPCLK2_DIV6);
  ADC.Instance=ADC1;ADC.Init.ScanConvMode=ADC_SCAN_DISABLE;
  ADC.Init.ContinuousConvMode=DISABLE;ADC.Init.DiscontinuousConvMode=DISABLE;
  ADC.Init.ExternalTrigConv=ADC_SOFTWARE_START;ADC.Init.DataAlign=ADC_DATAALIGN_RIGHT;ADC.Init.NbrOfConversion=1;
- if(HAL_ADC_Init(&ADC)!=HAL_OK || HAL_ADCEx_Calibration_Start(&ADC)!=HAL_OK)Error_Handler();
+ if(HAL_ADC_Init(&ADC)!=HAL_OK || HAL_ADCEx_Calibration_Start(&ADC)!=HAL_OK)ArmBoard_Errors++;
  HAL_NVIC_SetPriority(I2C1_EV_IRQn,1,0);HAL_NVIC_SetPriority(I2C1_ER_IRQn,1,0);
  HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
- ConfigureLink();
+ // A failed peripheral setup is retried by the service loop; stopping here would take the whole remote offline.
+ if(!ConfigureLink()){ArmBoard_Errors++;Rearm=1;}
 }
 void ArmBoard_Service(void)
 {
@@ -106,7 +107,8 @@ void ArmBoard_Service(void)
  {
   RetryTick=Now;HAL_NVIC_DisableIRQ(I2C1_EV_IRQn);HAL_NVIC_DisableIRQ(I2C1_ER_IRQn);
   (void)HAL_I2C_DeInit(&Link);__HAL_RCC_I2C1_FORCE_RESET();__HAL_RCC_I2C1_RELEASE_RESET();
-  __HAL_RCC_I2C1_CLK_ENABLE();Receiving=Rearm=0;ConfigureLink();
+  __HAL_RCC_I2C1_CLK_ENABLE();Receiving=0;
+  if(ConfigureLink())Rearm=0;else {ArmBoard_Errors++;Rearm=1;}
   HAL_NVIC_ClearPendingIRQ(I2C1_EV_IRQn);HAL_NVIC_ClearPendingIRQ(I2C1_ER_IRQn);
   HAL_NVIC_EnableIRQ(I2C1_EV_IRQn);HAL_NVIC_EnableIRQ(I2C1_ER_IRQn);
  }

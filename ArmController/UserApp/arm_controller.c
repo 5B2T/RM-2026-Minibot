@@ -28,7 +28,7 @@ void ArmController_Step(void)
  }
  if((uint32_t)(Now-PrintTick)>=1000U)
  {
-  PrintTick=Now;Remote_Status S=Controller_GetStatus();char Text[200];
+  PrintTick=Now;Remote_Status S=Controller_GetStatus();static char Text[200];
   (void)snprintf(Text,sizeof(Text),"I2C RX=%lu ERR=%lu VALID=%u KEYS=%04X ACK=%u MODE=%u POTS=%u,%u,%u,%u,%u ADC=%u\r\n",
    (unsigned long)ArmBoard_RxCount,(unsigned long)ArmBoard_Errors,Input.Valid,Input.Keys,
    S.LinkAck,S.Mode,Pots[0],Pots[1],Pots[2],Pots[3],Pots[4],PotsValid);
