@@ -6,7 +6,7 @@
 static Remote_Status Status;
 static uint16_t Centers[4],Candidate[4],RawKeys,StableKeys;
 static uint8_t KeyStarted,CenterStarted,AwaitingAck;
-static uint32_t KeyTick,CenterTick,ResumeTick,UpdateTick;
+static uint32_t KeyTick,CenterTick,ResumeTick,UpdateTick,InvalidTick;
 static const int8_t Signs[4]=REMOTE_AXIS_SIGNS;
 static const float Speeds[]={.2f,.35f,.5f};
 static const float Turns[]={.5f,.8f,1.2f}; // rad/s, provisional commissioning values.
@@ -14,7 +14,7 @@ static uint8_t Neutral(void){for(unsigned i=0;i<4;i++)if(Status.Axis[i]!=0)retur
 void Controller_Lock(void)
 {Status.Mode=REMOTE_LOCKED;Status.Vx=Status.Vy=Status.Wz=0;Status.ArmForward=Status.ArmRight=Status.ArmUp=Status.Gripper=0;AwaitingAck=0;}
 void Controller_Init(void)
-{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=0;RawKeys=StableKeys=0;UpdateTick=0;Controller_Lock();}
+{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=0;RawKeys=StableKeys=0;UpdateTick=InvalidTick=0;Controller_Lock();}
 static float Axis(uint16_t Raw,uint16_t Center,int8_t Sign)
 {
  int d=(int)Raw-Center;if(d>=-REMOTE_AXIS_DEADZONE&&d<=REMOTE_AXIS_DEADZONE)return 0;
@@ -28,7 +28,7 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
 {
  uint32_t Elapsed=NowMs-UpdateTick;UpdateTick=NowMs;
  if(Elapsed>50)Elapsed=50;
- Status.InputValid=Input!=NULL&&Input->Valid&&(uint32_t)(NowMs-Input->TickMs)<REMOTE_INPUT_STALE_MS;
+ Status.InputValid=Input!=NULL&&Input->Valid; // Each BSP ages its own sample before reporting Valid.
  if(Status.InputValid)for(unsigned i=0;i<5;i++)if(Input->ADC[i]>4095)Status.InputValid=0;
  uint16_t Keys=Input!=NULL?Input->Keys:0;
  if(!KeyStarted){KeyStarted=1;RawKeys=StableKeys=Keys;KeyTick=NowMs;}
@@ -41,7 +41,18 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  if(Keys&KEY_MASK(KEY_STOP))Controller_Lock(); // STOP bypasses key debounce.
  if(Status.LinkAck&&(uint32_t)(NowMs-Status.LastAckMs)>=REMOTE_LINK_STALE_MS){Status.LinkAck=0;Controller_Lock();}
  if(Status.Mode==REMOTE_RESUMING&&(uint32_t)(NowMs-ResumeTick)>=REMOTE_LINK_STALE_MS)Controller_Lock();
- if(!Status.InputValid){Controller_Lock();CenterStarted=0;return;}
+ if(!Status.InputValid)
+ {
+  // A lost frame must stop the wheels, not force a re-arm: hold the mode and let the next valid
+  // frame drive again. Only a lasting loss of input locks the remote.
+  if(!InvalidTick)InvalidTick=NowMs;
+  Status.Vx=Status.Vy=Status.Wz=0;
+  Status.ArmForward=Status.ArmRight=Status.ArmUp=Status.Gripper=0;
+  if(Status.Mode==REMOTE_RESUMING||(uint32_t)(NowMs-InvalidTick)>=REMOTE_INPUT_INVALID_LOCK_MS)Controller_Lock();
+  CenterStarted=0;
+  return;
+ }
+ InvalidTick=0;
  memcpy(Status.Raw,Input->ADC,sizeof(Status.Raw));Status.SupplyV=Input->ADC[4]*(REMOTE_ADC_REFERENCE_V*REMOTE_POWER_DIVIDER/4095.0f);
  if(!Status.Calibrated)
  {

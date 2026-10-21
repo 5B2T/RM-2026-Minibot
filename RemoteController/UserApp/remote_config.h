@@ -5,6 +5,8 @@
 #define REMOTE_INPUT_STALE_MS 30U
 #define REMOTE_TX_PERIOD_MS 20U
 #define REMOTE_LINK_STALE_MS 80U
+// Lost input stops the command output at once but only re-locks the remote after this long.
+#define REMOTE_INPUT_INVALID_LOCK_MS 200U
 #define REMOTE_RADIO_RETRY_MS 500U
 #define REMOTE_DEBOUNCE_MS 20U
 #define REMOTE_CENTER_WAIT_MS 500U

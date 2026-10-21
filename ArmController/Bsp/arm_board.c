@@ -129,7 +129,7 @@ void ArmBoard_Service(void)
 Remote_Input ArmBoard_Input(uint32_t Now)
 {
  Remote_Input Input=Snapshot;
- Input.Valid=Input.Valid && HaveSequence && (uint32_t)(Now-Input.TickMs)<30U;
+ Input.Valid=Input.Valid && HaveSequence && (uint32_t)(Now-Input.TickMs)<ARM_BOARD_INPUT_STALE_MS;
  if(!Input.Valid)Input.Keys=0;
  return Input;
 }
