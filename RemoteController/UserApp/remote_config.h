@@ -15,15 +15,16 @@
 #define REMOTE_CENTER_MAX 2560
 #define REMOTE_CENTER_STABILITY 40
 #define REMOTE_TURN_ACCEL_RAD_S2 2.0f
-// ADC order: PA1, PA2, PA3, PA6, PA4. Axis order / signs require board verification.
-#define REMOTE_LEFT_X_INDEX 0U
-#define REMOTE_LEFT_Y_INDEX 1U
+#define REMOTE_SPEED_MPS .54f
+#define REMOTE_TURN_RAD_S 1.8f
+// ADC order: PA1, PA2, PA3, PA6, PA4. Left stick corrected from field observation:
+// old left -> forward; new forward = ADC0+, new left = ADC1+.
+#define REMOTE_LEFT_X_INDEX 1U
+#define REMOTE_LEFT_Y_INDEX 0U
 #define REMOTE_RIGHT_X_INDEX 2U
 #define REMOTE_RIGHT_Y_INDEX 3U
-#define REMOTE_AXIS_SIGNS {1,1,1,1}
+// Right stick up decreases ADC3; invert Y only so up commands positive joint motion.
+#define REMOTE_AXIS_SIGNS {1,-1,1,-1}
 #define REMOTE_ADC_REFERENCE_V 3.3f
 #define REMOTE_POWER_DIVIDER 3.0f
-#define REMOTE_OLED_ADDRESS 0x3cU
-#define REMOTE_OLED_RETRY_MS 1000U
-#define REMOTE_OLED_REFRESH_MS 300U
 #endif

@@ -67,7 +67,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
 )
 
-# Reuse chip-independent radio/protocol/display sources with F103 BSP adapters.
+# Chip 1 only samples inputs and forwards them to chip 2 over I2C.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
  Bsp/input/bsp_input.c Bsp/time/bsp_time.c Bsp/i2c/bsp_soft_i2c.c
  UserApp/remote_app.c)

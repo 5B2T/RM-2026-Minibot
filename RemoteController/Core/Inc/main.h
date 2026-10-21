@@ -63,10 +63,6 @@ void Error_Handler(void);
 #define KEY_RIGHTROCKER_GPIO_Port GPIOC
 #define WAUP_Pin GPIO_PIN_0
 #define WAUP_GPIO_Port GPIOA
-#define OLED_SCL_Pin GPIO_PIN_5
-#define OLED_SCL_GPIO_Port GPIOA
-#define OLED_SDA_Pin GPIO_PIN_7
-#define OLED_SDA_GPIO_Port GPIOA
 #define RADIO_CSN_Pin GPIO_PIN_10
 #define RADIO_CSN_GPIO_Port GPIOB
 #define RADIO_IRQ_Pin GPIO_PIN_11

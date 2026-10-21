@@ -14,11 +14,19 @@ static ChassisTest_Status State,Published;
 static uint8_t Owned,Released,WasConnected;
 static uint32_t Started,LastStopGeneration,LastMovement[ROBOT_WHEEL_COUNT];
 static uint32_t PhaseTick;
+static const ChassisTest_Action SquareActions[]={CHASSIS_ACTION_FORWARD,CHASSIS_ACTION_LEFT,
+    CHASSIS_ACTION_BACKWARD,CHASSIS_ACTION_RIGHT};
+#define SQUARE_STEPS (4U*ROBOT_CHASSIS_TEST_SQUARE_LAPS)
+static uint32_t StageDuration(void)
+{
+    if(State.Step<SQUARE_STEPS)return ROBOT_CHASSIS_TEST_SQUARE_SIDE_MS;
+    return (uint32_t)ceilf(6283.185307f/ROBOT_CHASSIS_TEST_TURN_RADPS);
+}
 
 void ChassisTest_Init(void)
 {
     memset(&Inbox,0,sizeof(Inbox));memset(&State,0,sizeof(State));Published=State;
-    Inbox.Preset=State.Preset=CHASSIS_TEST_AUTO;Published=State;
+    Inbox.Preset=State.Preset=CHASSIS_TEST_COMBINED;Published=State;
     Owned=Released=WasConnected=0;Started=LastStopGeneration=0;
     PhaseTick=0;
     memset(LastMovement,0,sizeof(LastMovement));
@@ -61,7 +69,7 @@ ChassisTest_Status ChassisTest_GetStatus(void)
 static void Halt(ChassisTest_Fault Fault,uint8_t Wheel)
 {
     State.Running=0;State.Fault=Fault;State.FaultWheel=Wheel;
-    State.Paused=State.Completed=0;
+    State.Completed=0;
 }
 static void BeginMotion(uint32_t Now)
 {
@@ -95,9 +103,8 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
     }
     if(Owned && !Visible) {Released=1;Halt(CHASSIS_TEST_OK,0);}
     Owned=Visible;State.Visible=Visible;
-    if(Preset!=State.Preset)Halt(CHASSIS_TEST_OK,0);
+    if(Preset!=State.Preset) {Halt(CHASSIS_TEST_OK,0);State.Step=State.Lap=0;}
     State.Preset=Preset;
-    if(Preset!=CHASSIS_TEST_AUTO)State.ActivePreset=Preset;
     if(!Claim) {Publish();return 0;}
     uint8_t RemoteStop=RemoteStopGeneration!=LastStopGeneration || (WasConnected && !RemoteConnected);
     LastStopGeneration=RemoteStopGeneration;WasConnected=RemoteConnected;
@@ -116,28 +123,30 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
             else
             {
                 State.Running=1;State.Fault=CHASSIS_TEST_OK;State.FaultWheel=0;
-                State.Paused=State.Completed=0;
-                State.ActivePreset=Preset==CHASSIS_TEST_AUTO?CHASSIS_TEST_FORWARD:Preset;
+                State.Completed=0;State.Step=0;State.Lap=1;
+                State.ActiveAction=SquareActions[0];
                 BeginMotion(Now);
             }
         }
         uint8_t NewMotion=Start;
-        if(State.Running && Preset==CHASSIS_TEST_AUTO)
+        if(State.Running && Preset==CHASSIS_TEST_COMBINED &&
+           (uint32_t)(Now-PhaseTick)>=StageDuration())
         {
-            if(State.Paused && (uint32_t)(Now-PhaseTick)>=ROBOT_CHASSIS_TEST_AUTO_PAUSE_MS)
+            if(State.Step==SQUARE_STEPS+1U)
+            {Halt(CHASSIS_TEST_OK,0);State.Completed=1;}
+            else
             {
-                State.Paused=0;
-                State.ActivePreset=(ChassisTest_Preset)(State.ActivePreset+1U);
+                State.Step++;
+                if(State.Step<SQUARE_STEPS)
+                {
+                    State.Lap=(uint8_t)(State.Step/4U+1U);
+                    State.ActiveAction=SquareActions[State.Step%4U];
+                }
+                else State.ActiveAction=State.Step==SQUARE_STEPS?CHASSIS_ACTION_CCW:CHASSIS_ACTION_CW;
                 BeginMotion(Now);NewMotion=1;
             }
-            else if(!State.Paused && (uint32_t)(Now-PhaseTick)>=ROBOT_CHASSIS_TEST_AUTO_RUN_MS)
-            {
-                if(State.ActivePreset==CHASSIS_TEST_CW)
-                {Halt(CHASSIS_TEST_OK,0);State.Completed=1;}
-                else {State.Paused=1;PhaseTick=Now;}
-            }
         }
-        if(State.Running && !State.Paused && !NewMotion)
+        if(State.Running && !NewMotion)
         {
             for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
             {
@@ -151,26 +160,22 @@ uint8_t ChassisTest_Control(Robot_ChassisCommand *Command,const Robot_Status *Fe
             }
         }
     }
-    if(State.Running && !State.Paused)
+    if(State.Running)
     {
         Command->Enabled=1;
-        if(State.ActivePreset>=CHASSIS_TEST_M1 && State.ActivePreset<=CHASSIS_TEST_M4)
+        if(State.Preset>=CHASSIS_TEST_M1 && State.Preset<=CHASSIS_TEST_M4)
         {
             Command->Mode=ROBOT_COMMAND_WHEELS;
-            Command->Target.Wheels[State.ActivePreset-CHASSIS_TEST_M1]=ROBOT_CHASSIS_TEST_SPEED_MPS;
+            Command->Target.Wheels[State.Preset-CHASSIS_TEST_M1]=ROBOT_CHASSIS_TEST_SPEED_MPS;
         }
-        else switch(State.ActivePreset)
+        else switch(State.ActiveAction)
         {
-        case CHASSIS_TEST_FORWARD:Command->Target.Velocity.Vx=ROBOT_CHASSIS_TEST_SPEED_MPS;break;
-        case CHASSIS_TEST_BACKWARD:Command->Target.Velocity.Vx=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
-        case CHASSIS_TEST_LEFT:Command->Target.Velocity.Vy=ROBOT_CHASSIS_TEST_SPEED_MPS;break;
-        case CHASSIS_TEST_RIGHT:Command->Target.Velocity.Vy=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
-        case CHASSIS_TEST_CCW:Command->Target.Velocity.Wz=ROBOT_CHASSIS_TEST_TURN_RADPS;break;
-        case CHASSIS_TEST_CW:Command->Target.Velocity.Wz=-ROBOT_CHASSIS_TEST_TURN_RADPS;break;
-        case CHASSIS_TEST_CIRCLE_CCW:
-            Command->Target.Velocity.Vx=ROBOT_CHASSIS_TEST_SPEED_MPS;
-            Command->Target.Velocity.Wz=ROBOT_CHASSIS_TEST_SPEED_MPS/ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M;
-            break;
+        case CHASSIS_ACTION_FORWARD:Command->Target.Velocity.Vx=ROBOT_CHASSIS_TEST_SPEED_MPS;break;
+        case CHASSIS_ACTION_BACKWARD:Command->Target.Velocity.Vx=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
+        case CHASSIS_ACTION_LEFT:Command->Target.Velocity.Vy=ROBOT_CHASSIS_TEST_SPEED_MPS;break;
+        case CHASSIS_ACTION_RIGHT:Command->Target.Velocity.Vy=-ROBOT_CHASSIS_TEST_SPEED_MPS;break;
+        case CHASSIS_ACTION_CCW:Command->Target.Velocity.Wz=ROBOT_CHASSIS_TEST_TURN_RADPS;break;
+        case CHASSIS_ACTION_CW:Command->Target.Velocity.Wz=-ROBOT_CHASSIS_TEST_TURN_RADPS;break;
         default:Halt(CHASSIS_TEST_BAD_SAMPLE,0);Command->Enabled=0;break;
         }
     }

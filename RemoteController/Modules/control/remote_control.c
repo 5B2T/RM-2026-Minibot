@@ -5,16 +5,22 @@
 #include <stdlib.h>
 static Remote_Status Status;
 static uint16_t Centers[4],Candidate[4],RawKeys,StableKeys;
-static uint8_t KeyStarted,CenterStarted,AwaitingAck;
+static uint8_t KeyStarted,CenterStarted,AwaitingAck,JointCentered;
 static uint32_t KeyTick,CenterTick,ResumeTick,UpdateTick,InvalidTick;
 static const int8_t Signs[4]=REMOTE_AXIS_SIGNS;
-static const float Speeds[]={.2f,.35f,.5f};
-static const float Turns[]={.5f,.8f,1.2f}; // rad/s, provisional commissioning values.
 static uint8_t Neutral(void){for(unsigned i=0;i<4;i++)if(Status.Axis[i]!=0)return 0;return 1;}
+static void Lock(Remote_LockReason Reason,uint32_t NowMs)
+{
+ // Preserve the first cause of each lock; retries/secondary failures cannot overwrite it.
+ if(Status.Mode!=REMOTE_LOCKED || Status.LastLockReason==REMOTE_LOCK_STARTUP)
+ {Status.LastLockReason=Reason;Status.LastLockMs=NowMs;Status.LockCount++;}
+ Status.Mode=REMOTE_LOCKED;Status.Vx=Status.Vy=Status.Wz=0;
+ Status.ArmBase=Status.JointRate=0;AwaitingAck=JointCentered=0;
+}
 void Controller_Lock(void)
-{Status.Mode=REMOTE_LOCKED;Status.Vx=Status.Vy=Status.Wz=0;Status.ArmForward=Status.ArmRight=Status.ArmUp=Status.Gripper=0;AwaitingAck=0;}
+{Lock(REMOTE_LOCK_INTERNAL,UpdateTick);}
 void Controller_Init(void)
-{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=0;RawKeys=StableKeys=0;UpdateTick=InvalidTick=0;Controller_Lock();}
+{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=JointCentered=0;RawKeys=StableKeys=0;UpdateTick=InvalidTick=0;}
 static float Axis(uint16_t Raw,uint16_t Center,int8_t Sign)
 {
  int d=(int)Raw-Center;if(d>=-REMOTE_AXIS_DEADZONE&&d<=REMOTE_AXIS_DEADZONE)return 0;
@@ -28,27 +34,28 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
 {
  uint32_t Elapsed=NowMs-UpdateTick;UpdateTick=NowMs;
  if(Elapsed>50)Elapsed=50;
+ uint8_t WasValid=Status.InputValid;
  Status.InputValid=Input!=NULL&&Input->Valid; // Each BSP ages its own sample before reporting Valid.
  if(Status.InputValid)for(unsigned i=0;i<5;i++)if(Input->ADC[i]>4095)Status.InputValid=0;
- uint16_t Keys=Input!=NULL?Input->Keys:0;
- if(!KeyStarted){KeyStarted=1;RawKeys=StableKeys=Keys;KeyTick=NowMs;}
+ uint16_t Keys=Input!=NULL?(Input->Keys&~REMOTE_UNUSED_KEYS):0;
+ // First recovered input establishes the key baseline; a key held during the
+ // I2C outage must be released and freshly pressed before it can enable motion.
+ if(!KeyStarted || (Status.InputValid && !WasValid)){KeyStarted=1;RawKeys=StableKeys=Keys;KeyTick=NowMs;}
  if(Keys!=RawKeys){RawKeys=Keys;KeyTick=NowMs;}
  uint16_t Rising=0;
  if((uint32_t)(NowMs-KeyTick)>=REMOTE_DEBOUNCE_MS){Rising=Keys&~StableKeys;StableKeys=Keys;}
  Status.Keys=StableKeys;
  // GPIO keys remain usable for inspection even if ADC calibration/conversion fails.
- if(Rising&KEY_MASK(KEY_L_PRESS))Status.Page=(Status.Page+1)%3;
- if(Keys&KEY_MASK(KEY_STOP))Controller_Lock(); // STOP bypasses key debounce.
- if(Status.LinkAck&&(uint32_t)(NowMs-Status.LastAckMs)>=REMOTE_LINK_STALE_MS){Status.LinkAck=0;Controller_Lock();}
- if(Status.Mode==REMOTE_RESUMING&&(uint32_t)(NowMs-ResumeTick)>=REMOTE_LINK_STALE_MS)Controller_Lock();
+ if(Keys&KEY_MASK(KEY_L_DOWN))Lock(REMOTE_LOCK_STOP_KEY,NowMs); // Global STOP bypasses debounce.
+ if(Status.LinkAck&&(uint32_t)(NowMs-Status.LastAckMs)>=REMOTE_LINK_STALE_MS){Status.LinkAck=0;Lock(REMOTE_LOCK_ACK_TIMEOUT,NowMs);}
+ if(Status.Mode==REMOTE_RESUMING&&(uint32_t)(NowMs-ResumeTick)>=REMOTE_LINK_STALE_MS)Lock(REMOTE_LOCK_RESUME_TIMEOUT,NowMs);
  if(!Status.InputValid)
  {
-  // A lost frame must stop the wheels, not force a re-arm: hold the mode and let the next valid
-  // frame drive again. Only a lasting loss of input locks the remote.
+  // A lost frame must stop the command output, not force a re-arm: hold the mode and let the next
+  // valid frame drive again. Only a lasting loss of input locks the remote.
   if(!InvalidTick)InvalidTick=NowMs;
-  Status.Vx=Status.Vy=Status.Wz=0;
-  Status.ArmForward=Status.ArmRight=Status.ArmUp=Status.Gripper=0;
-  if(Status.Mode==REMOTE_RESUMING||(uint32_t)(NowMs-InvalidTick)>=REMOTE_INPUT_INVALID_LOCK_MS)Controller_Lock();
+  Status.Vx=Status.Vy=Status.Wz=0;Status.ArmBase=Status.JointRate=0;
+  if(Status.Mode==REMOTE_RESUMING||(uint32_t)(NowMs-InvalidTick)>=REMOTE_INPUT_INVALID_LOCK_MS)Lock(REMOTE_LOCK_INPUT,NowMs);
   CenterStarted=0;
   return;
  }
@@ -66,38 +73,48 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  }
  for(unsigned i=0;i<4;i++)Status.Axis[i]=Axis(Input->ADC[i],Centers[i],Signs[i]);
  uint8_t Idle=Neutral()&&!(Keys&REMOTE_ACTION_KEYS)&&!(StableKeys&REMOTE_ACTION_KEYS);
- uint16_t OtherKeys=(uint16_t)~KEY_MASK(KEY_RESUME);
+ uint16_t OtherKeys=(uint16_t)~KEY_MASK(KEY_L_UP);
  uint8_t RecoveryIdle=Idle&&!(Keys&OtherKeys)&&!(StableKeys&OtherKeys);
- if(Idle){if((Rising&KEY_MASK(KEY_L_UP))&&!(Keys&KEY_MASK(KEY_L_DOWN))&&Status.Gear<2)Status.Gear++;
-          if((Rising&KEY_MASK(KEY_L_DOWN))&&!(Keys&KEY_MASK(KEY_L_UP))&&Status.Gear>0)Status.Gear--;}
  // A fresh press is required; a held key across connection recovery cannot unlock.
- if((Rising&KEY_MASK(KEY_RESUME))&&RecoveryIdle&&Status.LinkAck&&Status.Mode==REMOTE_LOCKED)
+ if((Rising&KEY_MASK(KEY_L_UP))&&RecoveryIdle&&Status.LinkAck&&Status.Mode==REMOTE_LOCKED)
  {Status.Mode=REMOTE_RESUMING;ResumeTick=NowMs;AwaitingAck=1;}
- if(Status.Mode==REMOTE_RESUMING&&!RecoveryIdle)Controller_Lock();
+ if(Status.Mode==REMOTE_RESUMING&&!RecoveryIdle)Lock(REMOTE_LOCK_RESUME_MOVED,NowMs);
  if(Status.Mode!=REMOTE_ACTIVE)return;
- Status.Vx=Status.Axis[REMOTE_LEFT_Y_INDEX]*Speeds[Status.Gear];
- Status.Vy=-Status.Axis[REMOTE_LEFT_X_INDEX]*Speeds[Status.Gear];
+ Status.Vx=Status.Axis[REMOTE_LEFT_Y_INDEX]*REMOTE_SPEED_MPS;
+ Status.Vy=-Status.Axis[REMOTE_LEFT_X_INDEX]*REMOTE_SPEED_MPS;
  // Cap diagonal translation to the selected speed, preserve requested direction.
  float norm=sqrtf(Status.Vx*Status.Vx+Status.Vy*Status.Vy);
- if(norm>Speeds[Status.Gear]){Status.Vx*=Speeds[Status.Gear]/norm;Status.Vy*=Speeds[Status.Gear]/norm;}
+ if(norm>REMOTE_SPEED_MPS){Status.Vx*=REMOTE_SPEED_MPS/norm;Status.Vy*=REMOTE_SPEED_MPS/norm;}
  int Turn=((StableKeys&KEY_MASK(KEY_L_LEFT))!=0)-((StableKeys&KEY_MASK(KEY_L_RIGHT))!=0);
  if(Turn==0)Status.Wz=0; // Release or opposing keys stops turning immediately.
  else
  {
-  float Target=Turn*Turns[Status.Gear];
+  float Target=Turn*REMOTE_TURN_RAD_S;
   if(Status.Wz*Target<0)Status.Wz=0;
   float Delta=Target-Status.Wz,Limit=REMOTE_TURN_ACCEL_RAD_S2*Elapsed*.001f;
   if(Delta>Limit)Delta=Limit;
   if(Delta< -Limit)Delta=-Limit;
   Status.Wz+=Delta;
  }
- Status.ArmForward=Status.Axis[REMOTE_RIGHT_Y_INDEX];Status.ArmRight=Status.Axis[REMOTE_RIGHT_X_INDEX];
- Status.ArmUp=((StableKeys&KEY_MASK(KEY_R_UP))!=0)-((StableKeys&KEY_MASK(KEY_R_DOWN))!=0);
- Status.Gripper=((StableKeys&KEY_MASK(KEY_R_LEFT))!=0)-((StableKeys&KEY_MASK(KEY_R_RIGHT))!=0);
+ const Remote_Key SelectKeys[]={KEY_R_UP,KEY_R_DOWN,KEY_R_LEFT,KEY_R_RIGHT};
+ uint16_t Selection=Rising&(KEY_MASK(KEY_R_UP)|KEY_MASK(KEY_R_DOWN)|KEY_MASK(KEY_R_LEFT)|KEY_MASK(KEY_R_RIGHT));
+ if(Selection && !(Selection&(Selection-1U)))for(unsigned i=0;i<4;i++)
+  if(Selection&KEY_MASK(SelectKeys[i])){Status.SelectedJoint=(uint8_t)i;JointCentered=0;}
+ if(Status.Axis[REMOTE_RIGHT_Y_INDEX]==0)JointCentered=1;
+ Status.ArmBase=Status.Axis[REMOTE_RIGHT_X_INDEX];
+ Status.JointRate=JointCentered?Status.Axis[REMOTE_RIGHT_Y_INDEX]:0;
+ // Single actions are latched as counters so a lost frame cannot lose a press.
+ // Deploy requires the arm stick centered; gripper can operate during manual motion.
+ // Simultaneous action keys are ignored.
+ if(Status.Axis[REMOTE_RIGHT_X_INDEX]==0 && Status.Axis[REMOTE_RIGHT_Y_INDEX]==0)
+ {
+  if((Rising&KEY_MASK(KEY_DEPLOY)) && !(Keys&KEY_MASK(KEY_GRIPPER)))Status.DeployCounter++;
+ }
+ if((Rising&KEY_MASK(KEY_GRIPPER)) && !(Keys&KEY_MASK(KEY_DEPLOY)))Status.GripperCounter++;
 }
 void Controller_OnTx(uint8_t Flags,uint8_t Ack,uint32_t NowMs)
 {
- if(!Ack){Status.LinkAck=0;Controller_Lock();return;}
+ if(!Ack){Status.LinkAck=0;Lock(REMOTE_LOCK_TX_FAILED,NowMs);return;}
  Status.LinkAck=1;Status.LastAckMs=NowMs;
  if(Flags==REMOTE_CONTROL_FLAG_RESUME&&AwaitingAck&&Status.Mode==REMOTE_RESUMING)
  {Status.Mode=REMOTE_ACTIVE;AwaitingAck=0;}
@@ -105,9 +122,16 @@ void Controller_OnTx(uint8_t Flags,uint8_t Ack,uint32_t NowMs)
 void Controller_Command(RemoteControl_FrameTypeDef *Frame,uint8_t Sequence)
 {
  if(Frame==NULL)return;
- *Frame=(RemoteControl_FrameTypeDef){.Header=0xa5,.Version=REMOTE_CONTROL_VERSION_VELOCITY,.Sequence=Sequence};
+ *Frame=(RemoteControl_FrameTypeDef){.Header=0xa5,.Version=REMOTE_CONTROL_VERSION_ROBOT,.Sequence=Sequence};
+ Frame->Reserved[0]=Status.SelectedJoint;
+ Frame->Reserved[3]=Status.DeployCounter;Frame->Reserved[4]=Status.GripperCounter;
  if(Status.Mode==REMOTE_LOCKED)Frame->Flags=REMOTE_CONTROL_FLAG_STOP;
  else if(Status.Mode==REMOTE_RESUMING)Frame->Flags=REMOTE_CONTROL_FLAG_RESUME;
- else {Frame->M1=(int16_t)lroundf(Status.Vx*1000);Frame->M2=(int16_t)lroundf(Status.Vy*1000);Frame->M3=(int16_t)lroundf(Status.Wz*1000);}
+ else {
+  Frame->M1=(int16_t)lroundf(Status.Vx*1000);Frame->M2=(int16_t)lroundf(Status.Vy*1000);Frame->M3=(int16_t)lroundf(Status.Wz*1000);
+  Frame->M4=(int16_t)lroundf(Status.ArmBase*1000);
+  uint16_t Rate=(uint16_t)(int16_t)lroundf(Status.JointRate*1000);
+  Frame->Reserved[1]=(uint8_t)Rate;Frame->Reserved[2]=(uint8_t)(Rate>>8);
+ }
 }
 Remote_Status Controller_GetStatus(void){return Status;}

@@ -51,9 +51,6 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, OLED_SCL_Pin|OLED_SDA_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, RADIO_CSN_Pin|LED_GREEN_Pin|LED_BLUE_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
@@ -71,12 +68,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(WAUP_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : OLED_SCL_Pin OLED_SDA_Pin */
-  GPIO_InitStruct.Pin = OLED_SCL_Pin|OLED_SDA_Pin;
+  /* Chip-to-chip software I2C, former OLED pins. */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_WritePin(GPIOA,GPIO_PIN_5|GPIO_PIN_7,GPIO_PIN_SET);
 
   /*Configure GPIO pins : RADIO_CSN_Pin RADIO_CE_Pin LED_GREEN_Pin LED_BLUE_Pin */
   GPIO_InitStruct.Pin = RADIO_CSN_Pin|RADIO_CE_Pin|LED_GREEN_Pin|LED_BLUE_Pin;

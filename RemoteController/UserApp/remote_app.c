@@ -9,19 +9,18 @@ static uint8_t Sequence;
 void RemoteApp_Init(void)
 {
  Test_Init();
- SendTick=HAL_GetTick()-20U;Sequence=0;
+ SendTick=HAL_GetTick()-INPUT_LINK_PERIOD_MS;Sequence=0;
 }
 void RemoteApp_Step(void)
 {
  Test_Step();
  uint32_t Now=HAL_GetTick();
- if((uint32_t)(Now-SendTick)<20U)return;
+ if((uint32_t)(Now-SendTick)<INPUT_LINK_PERIOD_MS)return;
  SendTick=Now;
  Remote_Input Input=BSP_InputRead(Now);
- uint8_t Data[INPUT_LINK_SIZE]={0xa6,1,Sequence++,Input.Valid};
- InputLink_Put(Data+4,Input.Keys);
- for(uint8_t t=0;t<5;t++)InputLink_Put(Data+6+t*2,Input.ADC[t]);
- InputLink_Put(Data+18,InputLink_CRC(Data,18));
- uint8_t OK=BSP_SoftI2C_Write(INPUT_LINK_ADDRESS,Data,sizeof(Data));
+ InputLink_Frame Frame={.Sequence=Sequence++,.Keys=Input.Keys,.Valid=Input.Valid};
+ memcpy(Frame.ADC,Input.ADC,sizeof(Frame.ADC));
+ uint8_t Data[INPUT_LINK_SIZE];
+ uint8_t OK=InputLink_Encode(&Frame,Data) && BSP_SoftI2C_Write(INPUT_LINK_ADDRESS,Data,sizeof(Data));
  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,OK?GPIO_PIN_RESET:GPIO_PIN_SET);
 }

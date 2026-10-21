@@ -79,7 +79,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
  Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_spi.c)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
  Bsp UserApp ../RemoteController/Modules ../RemoteController/UserApp ../Bsp ../Modules)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE ARM_CONTROLLER_BRIDGE=1)
 target_link_libraries(${CMAKE_PROJECT_NAME} m)
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
  COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ArmController.hex

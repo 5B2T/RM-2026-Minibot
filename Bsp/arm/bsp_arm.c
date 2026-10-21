@@ -12,7 +12,8 @@ static void BaseStop(void)
 static uint8_t PulsesValid(const uint16_t *Pulse)
 {
     if(Pulse==NULL)return 0;
-    for(uint8_t i=0;i<BSP_ARM_SERVO_COUNT;i++)if(Pulse[i]<500 || Pulse[i]>2500)return 0;
+    for(uint8_t i=0;i<BSP_ARM_SERVO_COUNT;i++)
+        if(Pulse[i]!=0 && (Pulse[i]<500 || Pulse[i]>2500))return 0;
     return 1;
 }
 void BSP_Arm_Disable(void)

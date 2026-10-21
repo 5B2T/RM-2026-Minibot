@@ -17,4 +17,10 @@ typedef struct
     uint8_t Armed;
 } RemoteControl_LinkStatus;
 RemoteControl_LinkStatus RemoteControl_GetLinkStatus(void); // One atomic link snapshot.
+typedef struct
+{
+    float Base,Rate; // Normalized -1..1; car applies joint-specific limits.
+    uint8_t Joint,Initialize,Gripper,Enabled;
+} RemoteControl_ArmInput;
+RemoteControl_ArmInput RemoteControl_TakeArmInput(void); // Control owner, consumes one-shot actions.
 #endif

@@ -21,7 +21,8 @@ static uint8_t Ready;
 static uint8_t DisplayScheduled;
 static uint32_t DisplayTick,DisplayDelay;
 static struct {Arm_Command Command;uint32_t CreatedMs;uint8_t Pending,Stop;} ArmMailbox;
-static uint8_t ArmRemoteWasArmed;
+static uint8_t RadioSeen,ArmRadioOwned;
+static uint32_t RadioStopGeneration;
 _Static_assert(RX_PLOAD_WIDTH==REMOTE_CONTROL_FRAME_SIZE, "Radio payload must match protocol");
 
 uint8_t Robot_Init(void)
@@ -30,7 +31,7 @@ uint8_t Robot_Init(void)
     memset(&StatusSnapshot, 0, sizeof(StatusSnapshot));
     RadioRecoveryPending=0;
     memset(&ArmMailbox,0,sizeof(ArmMailbox));
-    ArmRemoteWasArmed=0;
+    RadioSeen=ArmRadioOwned=0;RadioStopGeneration=0;
     RemoteControl_Init();
     ChassisTest_Init();
     PowerMonitor_Init();
@@ -62,6 +63,10 @@ uint8_t Robot_ArmSubmit(const Arm_Command *Command)
     if(!Ready)return 0;
     if(!Arm_CommandValid(Command)) {Robot_ArmStop();return 0;}
     if(Command->Action==ARM_STOP) {Robot_ArmStop();return 1;}
+    // Radio owns the arm while V3 control is active. After a radio STOP/loss,
+    // serial commands cannot bypass the global interlock.
+    RemoteControl_LinkStatus Link=RemoteControl_GetLinkStatus();
+    if(ArmRadioOwned || (RadioSeen && !Link.Armed))return 0;
     uint32_t NowMs=BSP_TimeMs();uint8_t Accepted=0;
     taskENTER_CRITICAL();
     if(!ArmMailbox.Stop)
@@ -80,10 +85,20 @@ static void ArmControlStep(float DtS,uint32_t NowMs,RemoteControl_LinkStatus Lin
     Pending=ArmMailbox.Pending;Stop=ArmMailbox.Stop;
     ArmMailbox.Pending=ArmMailbox.Stop=0;
     taskEXIT_CRITICAL();
-    // Local commissioning is time-limited; loss of an armed radio link still stops it.
-    if(ArmRemoteWasArmed && (!Link.Connected || !Link.Armed))Stop=1;
-    ArmRemoteWasArmed=Link.Connected && Link.Armed;
-    if(Stop)Arm_Stop();
+    RemoteControl_ArmInput Input=RemoteControl_TakeArmInput();
+    if(Link.Connected || Link.StopGeneration!=RadioStopGeneration)RadioSeen=1;
+    if(Link.StopGeneration!=RadioStopGeneration)Stop=1;
+    RadioStopGeneration=Link.StopGeneration;
+    if(RadioSeen && (!Link.Connected || !Link.Armed))Stop=1;
+    // Local commissioning remains available before radio use, with its own lease.
+    if(Stop) {Arm_Stop();ArmRadioOwned=0;}
+    else if(Input.Enabled)
+    {
+        if(!ArmRadioOwned)Arm_Stop();
+        ArmRadioOwned=1;
+        Arm_RemoteInput(Input.Base,(Arm_Joint)Input.Joint,Input.Rate,Input.Initialize,Input.Gripper,NowMs);
+    }
+    else if(ArmRadioOwned) {Arm_Stop();ArmRadioOwned=0;}
     else if(Pending)(void)Arm_Request(&Command,CreatedMs,NowMs);
     Arm_Step(DtS,NowMs);
 }
@@ -94,11 +109,15 @@ void Robot_ControlStep(float DtS)
     uint8_t SampleValid=Chassis_Measure(DtS);
     RemoteControl_GetCommand(&RemoteCommand);
     RemoteControl_LinkStatus Link=RemoteControl_GetLinkStatus();
+    if(Link.Connected || Link.StopGeneration!=RadioStopGeneration)RadioSeen=1;
+    uint8_t GlobalLocked=RadioSeen && (!Link.Connected || !Link.Armed);
+    if(GlobalLocked)ChassisTest_Stop();
     Robot_Status Feedback={0};Chassis_GetFeedback(&Feedback);
     uint8_t TestSample=SampleValid && DtS>0 && DtS<=0.1f;
     if(!ChassisTest_Control(&Command,&Feedback,TestSample,BSP_TimeMs(),Link.StopGeneration,Link.Connected))
         Command=RemoteCommand;
     if(ChassisTest_TakeRelease())RemoteControl_Disconnect(); // Require explicit radio recovery after local testing.
+    if(GlobalLocked)Command.Enabled=0;
     if(!SampleValid)Chassis_Stop();
     else Chassis_Control(&Command,DtS);
     Robot_Status Status={0};

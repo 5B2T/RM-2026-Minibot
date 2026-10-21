@@ -10,14 +10,15 @@
 #include <stddef.h>
 #include <string.h>
 
-static DebugDisplay_State Menu={.Page=DEBUG_PAGE_STATUS,.MainMenu=1};
+static DebugDisplay_State Menu={.Page=DEBUG_PAGE_CHASSIS_TEST,.MainMenu=1};
 static uint8_t Started,RetryPending,FrameClockValid,KeysStarted;
 static uint32_t RetryTick,FrameTick;
 static uint32_t MenuRevision,SeenRevision;
 typedef struct {uint8_t Raw,Stable;uint32_t ChangeTick;} Display_Key;
 static Display_Key NextKey,BackKey;
-static const char *const PageNames[]={"STATUS","SPEED","PWM","POWER","CHASSIS TEST"};
-static const char *const TestNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW","M1+","M2+","M3+","M4+","AUTO","CIRCLE CCW"};
+static const char *const PageNames[]={"CHASSIS TEST","STATUS","SPEED","PWM","POWER"};
+static const char *const TestNames[]={"COMBO","M1+","M2+","M3+","M4+"};
+static const char *const ActionNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW"};
 _Static_assert(sizeof(PageNames)/sizeof(PageNames[0])==DEBUG_PAGE_COUNT,"OLED page names mismatch");
 _Static_assert(sizeof(TestNames)/sizeof(TestNames[0])==CHASSIS_TEST_COUNT,"Chassis preset names mismatch");
 static uint8_t TestAwaitRelease,TestBackDown,TestBackConsumed;
@@ -25,7 +26,7 @@ static uint32_t TestBackTick;
 
 void DebugDisplay_Init(void)
 {
-    Menu=(DebugDisplay_State){.Page=DEBUG_PAGE_STATUS,.MainMenu=1};
+    Menu=(DebugDisplay_State){.Page=DEBUG_PAGE_CHASSIS_TEST,.MainMenu=1};
     Started=RetryPending=FrameClockValid=KeysStarted=0;
     MenuRevision=SeenRevision=0;
     TestAwaitRelease=TestBackDown=TestBackConsumed=0;TestBackTick=0;
@@ -188,9 +189,11 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         const ChassisTest_Status *Test=&Status->ChassisTest;
         unsigned Preset=(unsigned)Test->Preset<CHASSIS_TEST_COUNT?(unsigned)Test->Preset:0;
         Line(0,"CHASSIS TEST  MM/S");
-        if(Preset==CHASSIS_TEST_AUTO && Test->Running && Test->ActivePreset<=CHASSIS_TEST_CW)
-            (void)snprintf(Text,sizeof(Text),"AUTO %u/6 %s %s",(unsigned)Test->ActivePreset+1U,
-                TestNames[Test->ActivePreset],Test->Paused?"WAIT":"RUN");
+        if(Preset==CHASSIS_TEST_COMBINED && Test->Running && Test->ActiveAction<=CHASSIS_ACTION_RIGHT)
+            (void)snprintf(Text,sizeof(Text),"SQ %u/%u %s RUN",(unsigned)Test->Lap,
+                (unsigned)ROBOT_CHASSIS_TEST_SQUARE_LAPS,ActionNames[Test->ActiveAction]);
+        else if(Preset==CHASSIS_TEST_COMBINED && Test->Running && Test->ActiveAction<=CHASSIS_ACTION_CW)
+            (void)snprintf(Text,sizeof(Text),"TURN %s RUN",ActionNames[Test->ActiveAction]);
         else (void)snprintf(Text,sizeof(Text),"%s %s",TestNames[Preset],
             Test->Completed?"DONE":Test->Running?"RUN":"STOP");
         Line(1,Text);
@@ -205,10 +208,13 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             (void)snprintf(Text,sizeof(Text),"%s M%u",Test->Fault==CHASSIS_TEST_NO_ENCODER?"NO ENC":"ENC SIGN",(unsigned)Test->FaultWheel);
             Line(6,Text);
         }
-        else if(Test->Fault==CHASSIS_TEST_OK && Preset==CHASSIS_TEST_CIRCLE_CCW)
+        else if(Test->Fault==CHASSIS_TEST_OK && Preset==CHASSIS_TEST_COMBINED)
         {
-            (void)snprintf(Text,sizeof(Text),"R:%ldCM %ldMM/S",
-                Scaled(ROBOT_CHASSIS_TEST_CIRCLE_RADIUS_M,100,9999),
+            if(Test->Running && Test->ActiveAction>=CHASSIS_ACTION_CCW)
+                (void)snprintf(Text,sizeof(Text),"TIMED 360DEG %ldMRAD",
+                    Scaled(ROBOT_CHASSIS_TEST_TURN_RADPS,1000,9999));
+            else (void)snprintf(Text,sizeof(Text),"%luMS %ldMM/S",
+                (unsigned long)ROBOT_CHASSIS_TEST_SQUARE_SIDE_MS,
                 Scaled(ROBOT_CHASSIS_TEST_SPEED_MPS,1000,9999));
             Line(6,Text);
         }
