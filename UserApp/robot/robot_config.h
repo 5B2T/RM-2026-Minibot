@@ -57,32 +57,34 @@
 #define ROBOT_DISPLAY_REFRESH_MS 500U
 #define ROBOT_BUTTON_DEBOUNCE_MS 30U
 // J1 shoulder, J2 elbow, J3 wrist pitch, J4 wrist roll, J5 gripper.
-// These endpoints/directions/neutral pulses are provisional, not board calibration.
+// Electrical travel for pulse conversion; mechanical limits are separate below.
+// User-specified nominal travel: JX6225 300 deg; MG90D 270 deg.
+// Supplied screenshots conflict (295 deg / 200+/-5 deg respectively): verify on hardware.
+// No old shoulder offset or continuous timing calibration. User confirmed original
+// J1 direction: logical 0/300 deg -> 500/2500 us, increasing angle raises the arm.
 #define ROBOT_ARM_SERVO_CONFIG { \
-    {SERVO_POSITION,500,1500,2500,300.0f,-1}, \
-    {SERVO_CONTINUOUS,500,1500,2500,0,-1}, \
-    {SERVO_CONTINUOUS,500,1500,2500,0,1}, \
+    {SERVO_POSITION,500,1500,2500,300.0f,1}, \
+    {SERVO_POSITION,500,1500,2500,300.0f,1}, \
+    {SERVO_POSITION,500,1500,2500,270.0f,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1} }
-// J1 commands/telemetry: new 0 = old 150 (servo 150), new 150 = old 0 (servo 300).
-// This fixed mechanical zero is not changed by ARM ZERO.
-#define ROBOT_ARM_SHOULDER_ZERO_DEG 150.0f
-#define ROBOT_ARM_SHOULDER_POSITION_MAX_DEG 150.0f
+// User-confirmed structural limits, 2026-10-22. Never rescale the PWM travel to these.
+#define ROBOT_ARM_POSITION_MIN_DEG {10.0f,23.0f,13.0f,0.0f,0.0f}
+#define ROBOT_ARM_POSITION_MAX_DEG {150.0f,180.0f,270.0f,180.0f,30.0f}
+// Positive jog / stick-up raises J1/J2/J3; J3 is higher at the SMALLER angle.
+#define ROBOT_ARM_JOG_DIRECTION {1,1,-1,1,1}
+// SW6 / INIT: J1, parallel J2/J3/J4, then open gripper.
+// Fold: J3 + close gripper together, then J2 -> J4 -> J1.
+#define ROBOT_ARM_POSES_CALIBRATED 1U
+#define ROBOT_ARM_GRIPPER_CALIBRATED 1U
 #define ROBOT_ARM_GRIPPER_CLOSED_DEG 0.0f
-#define ROBOT_ARM_GRIPPER_OPEN_DEG 45.0f
-// Continuous servo RATE remains a normalized PWM command, not measured speed.
-#define ROBOT_ARM_ELBOW_RATE_LIMIT 0.15f
-#define ROBOT_ARM_WRIST_PITCH_RATE_LIMIT 0.14f
-// User references: J2 ~90 deg/s at 0.15; J3 ~180 deg/s at 0.14 (2026-10-17).
-// Reference only; lower RATE values and different loads require calibration.
-#define ROBOT_ARM_ELBOW_REFERENCE_DPS 90.0f
-#define ROBOT_ARM_WRIST_PITCH_REFERENCE_DPS 180.0f
-#define ROBOT_ARM_INIT_SHOULDER_DEG 90.0f
-#define ROBOT_ARM_INIT_ELBOW_DEG 90.0f
-#define ROBOT_ARM_INIT_WRIST_PITCH_DEG 270.0f
+#define ROBOT_ARM_GRIPPER_OPEN_DEG 30.0f
+#define ROBOT_ARM_DEPLOY_DEG {90.0f,103.0f,270.0f,0.0f,ROBOT_ARM_GRIPPER_OPEN_DEG}
 #define ROBOT_ARM_SEQUENCE_SETTLE_MS 200U
-#define ROBOT_ARM_SEQUENCE_MAX_MS 10000U
-#define ROBOT_ARM_PRESET_DEG {0,0,0,90.0f,ROBOT_ARM_GRIPPER_CLOSED_DEG}
+#define ROBOT_ARM_SEQUENCE_MAX_MS 20000U
+// User manually places these four joint angles BEFORE power-on. This is an assumed
+// reference, not measured homing; still no PWM until explicit control.
+#define ROBOT_ARM_PRESET_DEG {10.0f,23.0f,13.0f,180.0f,0.0f}
 #define ROBOT_ARM_POSITION_RATE_DPS 90.0f
 #define ROBOT_ARM_COMMAND_MAX_MS 5000U
 #define ROBOT_ARM_DEBUG_TIMEOUT_MS 300U

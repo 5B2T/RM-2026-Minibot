@@ -9,10 +9,11 @@ typedef struct
 {
     Arm_Action Action;
     Arm_Joint Joint;
-    float Value; // POSITION: J1 0..150, J4 0..180, J5 closed=0/open=45 only; RATE -1..1 except J5; NEUTRAL us.
+    float Value; // POS: J1 10..150, J2 23..180, J3 13..270, J4 0..180, J5 0..30 deg.
+                 // RATE -1..1: positive raises J1/J2/J3 (J3 angle decreases).
     uint32_t DurationMs; // Requests expire, including preset and queued zero confirmation.
 } Arm_Command;
-typedef enum {ARM_OK=0,ARM_EXPIRED,ARM_INVALID_COMMAND,ARM_BAD_SAMPLE,ARM_HARDWARE_ERROR,ARM_NEEDS_ZERO} Arm_Fault;
+typedef enum {ARM_OK=0,ARM_EXPIRED,ARM_INVALID_COMMAND,ARM_BAD_SAMPLE,ARM_HARDWARE_ERROR,ARM_NEEDS_ZERO,ARM_NEEDS_CALIBRATION} Arm_Fault;
 typedef struct
 {
     float CommandedAngleDeg[ARM_SERVO_COUNT]; // Position joints only; valid after PositionEnabledMask is set, not measured.
@@ -29,8 +30,7 @@ typedef struct
     uint8_t PositionEnabledMask; // Signal-free until explicit POS/PRESET or sequence activation.
     uint32_t ZeroGeneration; // 1 after automatic startup zero; increments on manual confirmation.
     Arm_SequencePose SequencePose; // Open-loop reference, not measured pose.
-    uint8_t SequenceRunning,SequenceReturning,SequenceDoneMask; // Done bits: J1,J2,J3,J5.
-    uint8_t SequenceStage; // 0/1/2/3 = J1/J2/J3/J5; deploy 0..3, return 3..0.
-    float EstimatedContinuousDeg[2]; // J2/J3 open-loop integration from startup pose, NOT measured.
+    uint8_t SequenceRunning,SequenceReturning,SequenceDoneMask; // Done bits: J1..J5.
+    uint8_t SequenceStage; // Deploy 0 -> 255(J2/J3/J4) -> 4(grip); fold 2(+grip),1,3,0.
 } Arm_Status;
 #endif

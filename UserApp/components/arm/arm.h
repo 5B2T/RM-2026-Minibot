@@ -4,11 +4,13 @@
 // Hardware/state owner is the robot control task; Init is before scheduling.
 uint8_t Arm_Init(void);
 uint8_t Arm_CommandValid(const Arm_Command *Command);
-// ARM_ZERO stops motion and resets relative feedback without moving to a preset.
+// ARM_ZERO resets relative base feedback only; it cannot read or redefine servo angles.
 // Manual zero remains available to serial commissioning only; no remote key binding.
-// ARM_INITIALIZE toggles deploy/return once complete; duplicate requests during a sequence are ignored.
+// INIT: deploy J1, parallel J2/J3/J4, open grip; fold J3+close grip, J2,J4,J1.
+// Boot assumes the user manually placed J1/J2/J3/J4 at 10/23/13/180 before power-on.
+// Legacy PRESET is unsupported.
 uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs);
-void Arm_Stop(void); // Continuous joints stop; position joints hold last commanded pose.
+void Arm_Stop(void); // Stop base/jogging; all enabled servos hold last commanded position.
 void Arm_Disable(void); // Initialization/fatal fault: stop all PWM and clear readiness.
 void Arm_Step(float DtS,uint32_t NowMs);
 Arm_Status Arm_GetStatus(void);

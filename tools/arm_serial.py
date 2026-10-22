@@ -1,4 +1,4 @@
-"""ARMDBG V1 serial probe, bounded command and host-side named pose capture."""
+"""ARMDBG V2 serial probe, bounded command and host-side named pose capture."""
 import argparse
 import csv
 import json
@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 FIELDS = ["tick_ms", "debug_enabled", "ready", "active", "fault", "joint", "action",
-          "shoulder_mdeg", "roll_mdeg", "gripper_mdeg", "elbow_rate_milli",
-          "pitch_rate_milli", "shoulder_us", "elbow_us", "pitch_us", "roll_us",
+          "shoulder_mdeg", "roll_mdeg", "gripper_mdeg", "elbow_mdeg",
+          "pitch_mdeg", "shoulder_us", "elbow_us", "pitch_us", "roll_us",
           "gripper_us", "base_counts", "base_mdeg", "base_mrpm", "base_pwm",
-          "uart_faults", "commands", "errors"]
+          "uart_faults", "commands", "errors", "position_enabled_mask"]
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / "output" / "arm-debug"
 
 
@@ -54,7 +54,7 @@ def collect_status(port, timeout=2):
             return sample
         if line.startswith("ERR "):
             raise RuntimeError(line.strip())
-    raise TimeoutError("no 24-channel status frame")
+    raise TimeoutError("no ARMDBG V2 25-channel status frame (old V1 firmware is incompatible)")
 
 
 def main():
@@ -86,16 +86,12 @@ def main():
                 if len(tokens) != 5:
                     raise ValueError()
                 duration = int(tokens[-1])
-            elif tokens[:2] == ["ARM", "PRESET"] and len(tokens) == 3:
-                duration = int(tokens[-1])
-            elif tokens[:2] == ["ARM", "NEUTRAL"] and len(tokens) == 4:
-                duration = 200
             else:
                 raise ValueError()
             if not 1 <= duration <= 5000:
                 raise ValueError()
         except ValueError:
-            parser.error("use POS/RATE/PRESET (1..5000 ms) or NEUTRAL; one command only")
+            parser.error("use POS/RATE (1..5000 ms); one command only; old presets/neutral are unavailable")
     with serial.Serial(args.port, args.baud, timeout=0.05, write_timeout=1) as port:
         try:
             port.write(b"\n")  # resynchronize a partial/damaged line from a previous connection
@@ -140,10 +136,15 @@ def main():
                     if not sample["ready"] or sample["active"] or sample["base_pwm"]:
                         raise RuntimeError("record requires software ready and stopped")
                     entry = {"name": args.name, "time": datetime.now(timezone.utc).isoformat(),
-                             "protocol": "ARMDBG V1", "status": sample,
+                             "protocol": "ARMDBG V2", "status": sample,
                              "position_servos": "commanded, not measured",
                              "base_reference": "relative to this MCU boot",
-                             "continuous_joint_angles": "unavailable"}
+                             "servo_travel_deg": [300, 300, 270, 180, 180],
+                             "mechanical_min_deg": [10, 23, 13, 0, 0],
+                             "mechanical_max_deg": [150, 180, 270, 180, 30],
+                             "jog_direction": [1, 1, -1, 1, 1],
+                             "mechanical_limits": "user-confirmed 2026-10-22; old poses must not be replayed",
+                             "position_enabled_mask": sample["position_enabled_mask"]}
                     args.output.parent.mkdir(parents=True, exist_ok=True)
                     with args.output.open("a", encoding="utf-8") as stream:
                         stream.write(json.dumps(entry, ensure_ascii=False) + "\n")

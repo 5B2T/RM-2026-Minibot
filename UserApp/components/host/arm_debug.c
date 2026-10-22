@@ -60,6 +60,10 @@ static void Handle(const ArmDebug_Command *Input,uint32_t Now)
     default:break;
     }
     if(!Enabled) {Reply("ERR DISABLED\r\n");return;}
+    if(Input->Operation==ARM_DEBUG_INITIALIZE && !ROBOT_ARM_POSES_CALIBRATED)
+    {Reject("ERR CALIBRATION\r\n");return;}
+    if(Input->Operation==ARM_DEBUG_NEUTRAL || Input->Operation==ARM_DEBUG_PRESET)
+    {Reject("ERR UNSUPPORTED\r\n");return;} // Legacy continuous neutral / all-five preset.
     Arm_Command Command={0};
     Command.Joint=(Arm_Joint)Input->Joint;Command.Value=Input->Value;
     Command.DurationMs=Input->DurationMs;
@@ -89,21 +93,21 @@ static void SendStatus(uint32_t Now)
 {
     Robot_Status Robot;Robot_GetStatus(&Robot);Arm_Status *S=&Robot.Arm;
     char Output[BSP_DEBUG_UART_TX_SIZE];
-    // Integer CSV avoids printf float linkage and gives FireWater 24 stable channels.
+    // ARMDBG V2: 25 integer CSV channels. Slots 10/11 now report J2/J3 angles.
     // snprintf(newlib-nano) has no reliable 64-bit conversion: encode counts as decimal ourselves.
     char Counts[24];uint64_t Magnitude=S->BaseCounts<0?(uint64_t)(-(S->BaseCounts+1))+1U:(uint64_t)S->BaseCounts;
     unsigned Index=sizeof(Counts)-1U;Counts[Index]='\0';
     do {Counts[--Index]=(char)('0'+Magnitude%10U);Magnitude/=10U;}while(Magnitude);
     if(S->BaseCounts<0)Counts[--Index]='-';
     int N=snprintf(Output,sizeof(Output),
-        "%lu,%u,%u,%u,%u,%u,%u,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%u,%s,%ld,%ld,%d,%lu,%lu,%lu\r\n",
+        "%lu,%u,%u,%u,%u,%u,%u,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%u,%s,%ld,%ld,%d,%lu,%lu,%lu,%u\r\n",
         (unsigned long)S->TickMs,(unsigned)Enabled,(unsigned)S->Ready,(unsigned)S->Active,
         (unsigned)S->Fault,(unsigned)S->SelectedJoint,(unsigned)S->Action,
         Milli(S->CommandedAngleDeg[0]),Milli(S->CommandedAngleDeg[3]),Milli(S->CommandedAngleDeg[4]),
-        Milli(S->Rate[1]),Milli(S->Rate[2]),(unsigned)S->PulseUs[0],(unsigned)S->PulseUs[1],
+        Milli(S->CommandedAngleDeg[1]),Milli(S->CommandedAngleDeg[2]),(unsigned)S->PulseUs[0],(unsigned)S->PulseUs[1],
         (unsigned)S->PulseUs[2],(unsigned)S->PulseUs[3],(unsigned)S->PulseUs[4],Counts+Index,
         Milli(S->BaseRelativeAngleDeg),Milli(S->BaseRpm),(int)S->BasePWM,
-        (unsigned long)Faults,(unsigned long)Commands,(unsigned long)Errors);
+        (unsigned long)Faults,(unsigned long)Commands,(unsigned long)Errors,(unsigned)S->PositionEnabledMask);
     if(N>0 && (unsigned)N<sizeof(Output) && BSP_DebugUart_Write(Output,(uint16_t)N))
     {StreamTick=Now;StatusPending=0;}
 }
@@ -114,7 +118,7 @@ uint32_t ArmDebug_Step(void)
     {
         if(!BSP_DebugUart_Init())return 100U;
         Initialized=1;Faults=BSP_DebugUart_Faults();StreamTick=Now;
-        Reply("HELLO ARMDBG V1\r\n");
+        Reply("HELLO ARMDBG V2\r\n");
     }
     BSP_DebugUart_Service();
     uint32_t NewFaults=BSP_DebugUart_Faults();
