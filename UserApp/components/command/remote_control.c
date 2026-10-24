@@ -23,6 +23,7 @@ typedef struct
 }RemoteControl_StateTypeDef;
 
 static RemoteControl_StateTypeDef RemoteControl_State;
+static RemoteControl_TelemetryStatus RemoteControl_Telemetry;
 
 // Caller holds the task critical section; motor outputs remain owned by control task.
 static void RemoteControl_ClearConnection(void)
@@ -59,6 +60,7 @@ void RemoteControl_Init(void)
 {
     // Called once before the scheduler starts; no task can access the state yet.
     memset(&RemoteControl_State, 0, sizeof(RemoteControl_State));
+    memset(&RemoteControl_Telemetry, 0, sizeof(RemoteControl_Telemetry));
     RemoteControl_State.LastRxTick=BSP_TimeMs();
     RemoteControl_State.StopPending=1;
 }
@@ -66,6 +68,21 @@ void RemoteControl_Init(void)
 uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
 {
     RemoteControl_FrameTypeDef Frame;
+    RemoteTelemetry_FrameTypeDef Telemetry;
+    // Telemetry is decoded first: same header, size and CRC, different version byte.
+    if(RemoteTelemetry_Decode(Data, Length, &Telemetry))
+    {
+        taskENTER_CRITICAL();
+        memcpy(RemoteControl_Telemetry.Raw,Telemetry.Raw,sizeof(RemoteControl_Telemetry.Raw));
+        memcpy(RemoteControl_Telemetry.AngleCdeg,Telemetry.AngleCdeg,
+               sizeof(RemoteControl_Telemetry.AngleCdeg));
+        RemoteControl_Telemetry.Valid=(Telemetry.Flags&REMOTE_TELEMETRY_FLAG_POTS)!=0;
+        RemoteControl_Telemetry.Sequence=Telemetry.Sequence;
+        RemoteControl_Telemetry.TickMs=BSP_TimeMs();
+        RemoteControl_Telemetry.HasFrame=1;
+        taskEXIT_CRITICAL();
+        return 1; // Diagnostic only: the command lease above is left untouched.
+    }
     if(!CommandProtocol_Decode(Data, Length, &Frame))return 0;
 
     uint8_t Stop=(Frame.Flags & REMOTE_CONTROL_FLAG_STOP)!=0;
@@ -194,4 +211,11 @@ RemoteControl_ArmInput RemoteControl_TakeArmInput(void)
     RemoteControl_State.Arm.Initialize=RemoteControl_State.Arm.Gripper=0;
     taskEXIT_CRITICAL();
     return Input;
+}
+RemoteControl_TelemetryStatus RemoteControl_GetTelemetry(void)
+{
+    taskENTER_CRITICAL();
+    RemoteControl_TelemetryStatus Status=RemoteControl_Telemetry;
+    taskEXIT_CRITICAL();
+    return Status;
 }

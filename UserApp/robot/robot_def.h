@@ -43,6 +43,17 @@ typedef struct
     uint8_t Valid; // Numbers retained on error must not be displayed as valid.
     Robot_PowerState State;
 } Robot_PowerStatus;
+#define ROBOT_TELEMETRY_CHANNELS 5U
+// Diagnostic pot feedback from chip 2. AngleCdeg is the provisional linear ADC scale,
+// not a calibrated joint angle, and it never participates in arm control.
+typedef struct
+{
+    uint16_t Raw[ROBOT_TELEMETRY_CHANNELS];
+    uint16_t AngleCdeg[ROBOT_TELEMETRY_CHANNELS]; // 0.01 deg.
+    uint32_t TickMs; // Telemetry arrival tick, independent of the command lease.
+    uint8_t Valid; // Chip 2 reported a good conversion for the frame received.
+    uint8_t Online; // A frame arrived within ROBOT_TELEMETRY_TIMEOUT_MS.
+} Robot_Telemetry;
 typedef struct
 {
     float MeasuredSpeed[ROBOT_WHEEL_COUNT];
@@ -55,6 +66,7 @@ typedef struct
     uint8_t MotorsEnabled;
     Robot_PowerStatus Power; // Independently sampled with its own timestamp and validity.
     Arm_Status Arm; // Commanded pose and relative base feedback, no absolute arm sensing.
+    Robot_Telemetry Telemetry; // Read-only pot feedback from the remote, display only.
     ChassisTest_Status ChassisTest;
 } Robot_Status;
 #endif

@@ -4,6 +4,9 @@
 #define REMOTE_INPUT_PERIOD_MS 5U
 #define REMOTE_INPUT_STALE_MS 30U
 #define REMOTE_TX_PERIOD_MS 20U
+// Pot telemetry is sent between command frames, so the control cadence and its ACK lease
+// are untouched: no command slot is ever spent on a telemetry frame.
+#define REMOTE_TELEMETRY_PERIOD_MS 100U
 #define REMOTE_LINK_STALE_MS 80U
 // Lost input stops the command output at once but only re-locks the remote after this long.
 #define REMOTE_INPUT_INVALID_LOCK_MS 200U

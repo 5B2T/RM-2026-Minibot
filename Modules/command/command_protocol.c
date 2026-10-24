@@ -28,7 +28,8 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
     if(Data[0]!=0xa5U || (Data[1]!=REMOTE_CONTROL_VERSION_WHEELS &&
                          Data[1]!=REMOTE_CONTROL_VERSION_VELOCITY &&
                          Data[1]!=REMOTE_CONTROL_VERSION_ROBOT))return 0;
-    if(Data[3]&~(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME))return 0;
+    if(Data[3]&~(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME|
+                  REMOTE_CONTROL_FLAG_ARM_TARGETS))return 0;
     if(CRC16(Data, REMOTE_CONTROL_FRAME_SIZE-2U)!=ReadU16(Data+30))return 0;
     RemoteControl_FrameTypeDef Decoded={
         .Header=Data[0],.Version=Data[1],.Sequence=Data[2],.Flags=Data[3],
@@ -40,7 +41,9 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
         int16_t Rate=ReadI16(Decoded.Reserved+1);
         if(Decoded.Reserved[0]>3 || Rate<-1000 || Rate>1000 ||
            Decoded.M4<-1000 || Decoded.M4>1000)return 0;
-        for(unsigned i=5;i<sizeof(Decoded.Reserved);i++)if(Decoded.Reserved[i])return 0;
+        // The extension owns Reserved[5..17]; otherwise they stay strict zero.
+        if(!(Decoded.Flags&REMOTE_CONTROL_FLAG_ARM_TARGETS))
+            for(unsigned i=5;i<sizeof(Decoded.Reserved);i++)if(Decoded.Reserved[i])return 0;
         if(!(Decoded.Flags&REMOTE_CONTROL_FLAG_STOP) &&
            (Decoded.Flags&REMOTE_CONTROL_FLAG_RESUME) && Rate)return 0;
     }

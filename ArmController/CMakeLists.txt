@@ -67,12 +67,13 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
 )
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
- Bsp/arm_board.c UserApp/arm_controller.c
+ Bsp/arm_board.c UserApp/arm_controller.c UserApp/arm_targets.c
  ../RemoteController/Bsp/radio/bsp_nrf24l01.c
  ../RemoteController/Bsp/time/bsp_time.c
  ../RemoteController/Modules/control/remote_control.c
  ../RemoteController/UserApp/components/radio/remote_radio.c
  ../Modules/radio/nrf24l01.c ../Modules/command/command_protocol.c
+ ../Modules/command/telemetry_protocol.c
  Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_adc.c
  Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_adc_ex.c
  Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_i2c.c
