@@ -17,9 +17,9 @@ static const ArmTarget_Cal DefaultCal[ARM_TARGET_CHANNELS] =
     {0, 4095, 0, 33300, 1, 500, 32800},
     // Shoulder: servo travel 295 deg.
     {0, 4095, 0, 33300, 1, 1000, 28500},
-    // Elbow: continuous servo, absolute angle is a reference only.
+    // Elbow: position servo; full pot span until calibrated.
     {0, 4095, 0, 33300, 1, 0, 33300},
-    // Wrist pitch: continuous servo, absolute angle is a reference only.
+    // Wrist pitch: position servo; full pot span until calibrated.
     {0, 4095, 0, 33300, 1, 0, 33300},
     // Wrist roll: servo travel 180 deg.
     {0, 4095, 0, 33300, 1, 500, 17500}
