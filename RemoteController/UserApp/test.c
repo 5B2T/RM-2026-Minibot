@@ -8,10 +8,13 @@ static uint32_t KeyTick;
 static uint8_t Validity=2;
 static char Tx[512];
 static uint16_t TxRead,TxWrite;
+// Names must follow Remote_Key order, not the old working labels: the right stick
+// buttons are joint selectors (R_UP/R_DOWN/R_LEFT/R_RIGHT), PC14 is the gripper and
+// PA0 is deploy. L_PRESS/R_PRESS are not wired on this board and never report.
 static const char *KeyNames[KEY_COUNT]={
- "LEFT_UP PA11","LEFT_DOWN PA12","LEFT_LEFT PA15","LEFT_RIGHT PB3",
- "KEY_A PB6","KEY_A_PLUS PB7","KEY_B PB8","KEY_B_PLUS PB9",
- "LEFT_ROCKER PA8","RIGHT_ROCKER PC15","KEY_1 PC14","WAUP PA0"};
+ "L_UP PA11","L_DOWN PA12","L_LEFT PA15","L_RIGHT PB3",
+ "R_UP PB6","R_DOWN PB7","R_LEFT PB8","R_RIGHT PB9",
+ "L_PRESS PA8","R_PRESS PC15","GRIPPER PC14","DEPLOY PA0"};
 // Printing is diagnostic only: text is queued and flushed a few bytes per step, so a stalled
 // UART can never block the input bridge. Full queue simply drops the line.
 static void Send(const char *Text)
