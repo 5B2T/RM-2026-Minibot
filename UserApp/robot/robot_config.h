@@ -16,6 +16,8 @@
 #define ROBOT_COMM_POLL_MS 5U
 #define ROBOT_RADIO_RETRY_MS 100U
 #define ROBOT_REMOTE_TIMEOUT_MS 100U
+// Pot telemetry arrives every ~100 ms and never counts as a command frame.
+#define ROBOT_TELEMETRY_TIMEOUT_MS 300U
 #define ROBOT_WHEEL_DIAMETER_M 0.060f
 // 13 encoder lines * 30 reduction * x4 decoding, per output-shaft revolution.
 #define ROBOT_ENCODER_CPR 1560.0f

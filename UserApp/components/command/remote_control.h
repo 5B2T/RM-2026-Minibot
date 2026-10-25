@@ -1,12 +1,25 @@
 #ifndef APP_REMOTE_CONTROL_H
 #define APP_REMOTE_CONTROL_H
 #include "command/command_protocol.h"
+#include "command/telemetry_protocol.h"
 #include "robot/robot_def.h"
 // Init before scheduling. Other APIs are task-context only, not ISR APIs.
 // Startup/STOP/timeout/fault: zero-speed RESUME then fresh motion frames.
 // Sequence increments per frame (heartbeat included), wraps 255 -> 0.
 void RemoteControl_Init(void);
 uint8_t RemoteControl_Process(const uint8_t *Data, uint8_t Length); // Communication owner.
+// Pot telemetry shares the command pipe but has its own timestamp: it never arms,
+// refreshes the command lease or feeds the arm.
+typedef struct
+{
+    uint16_t Raw[REMOTE_TELEMETRY_CHANNELS];
+    uint16_t AngleCdeg[REMOTE_TELEMETRY_CHANNELS];
+    uint32_t TickMs;
+    uint8_t Valid;
+    uint8_t HasFrame;
+    uint8_t Sequence;
+} RemoteControl_TelemetryStatus;
+RemoteControl_TelemetryStatus RemoteControl_GetTelemetry(void); // One atomic snapshot.
 void RemoteControl_Disconnect(void); // Latch STOP; hardware is written by control task.
 void RemoteControl_GetCommand(Robot_ChassisCommand *Command); // Control owner, atomic snapshot.
 typedef struct

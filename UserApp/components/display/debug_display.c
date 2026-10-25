@@ -16,7 +16,7 @@ static uint32_t RetryTick,FrameTick;
 static uint32_t MenuRevision,SeenRevision;
 typedef struct {uint8_t Raw,Stable;uint32_t ChangeTick;} Display_Key;
 static Display_Key NextKey,BackKey;
-static const char *const PageNames[]={"CHASSIS TEST","STATUS","SPEED","PWM","POWER"};
+static const char *const PageNames[]={"CHASSIS TEST","STATUS","SPEED","PWM","POWER","POT ADC"};
 static const char *const TestNames[]={"COMBO","M1+","M2+","M3+","M4+"};
 static const char *const ActionNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW"};
 _Static_assert(sizeof(PageNames)/sizeof(PageNames[0])==DEBUG_PAGE_COUNT,"OLED page names mismatch");
@@ -177,8 +177,7 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             (void)snprintf(Text,sizeof(Text),"%s %s",View.Cursor==i?">":" ",PageNames[i]);
             Line((uint8_t)(i+1),Text);
         }
-        Line(6,"PA15: NEXT");
-        Line(7,"PE6: ENTER");
+        Line(7,"PA15:NEXT PE6:ENTER");
         return;
     }
     (void)snprintf(Text,sizeof(Text),"%u/%u %s",(unsigned)View.Page+1,(unsigned)DEBUG_PAGE_COUNT,
@@ -263,6 +262,25 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             Line(6,Text);
         }
         else Line(6,"SOC: --");
+    }
+    else if(View.Page==DEBUG_PAGE_POT)
+    {
+        // Read-only pot feedback from chip 2: raw ADC plus the provisional linear angle.
+        const Robot_Telemetry *Telemetry=&Status->Telemetry;
+        Line(0,"POT ADC DEG (UNCAL)");
+        Line(1,!Telemetry->Online?"NO TELEMETRY":Telemetry->Valid?"CHIP2 OK":"POTS INVALID");
+        for(unsigned i=0;i<ROBOT_TELEMETRY_CHANNELS;i++)
+        {
+            (void)snprintf(Text,sizeof(Text),"J%u %4u %3lu.%lud",i+1,(unsigned)Telemetry->Raw[i],
+                (unsigned long)(Telemetry->AngleCdeg[i]/100U),
+                (unsigned long)(Telemetry->AngleCdeg[i]%100U/10U));
+            Line((uint8_t)(i+2),Text);
+        }
+        if(Telemetry->Online)
+            (void)snprintf(Text,sizeof(Text),"AGE %luMS",(unsigned long)(NowMs-Telemetry->TickMs));
+        else Text[0]='\0';
+        Line(7,Text);
+        return;
     }
     else
     {

@@ -54,6 +54,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Modules/algorithm/mecanum.c
     Modules/algorithm/pi_controller.c
     Modules/command/command_protocol.c
+    Modules/command/telemetry_protocol.c
     Modules/command/arm_debug_protocol.c
     Modules/radio/nrf24l01.c
     Modules/wheel/speed.c

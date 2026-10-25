@@ -126,6 +126,13 @@ void Robot_ControlStep(float DtS)
     Link=RemoteControl_GetLinkStatus();
     ArmControlStep(DtS,Status.TickMs,Link);
     Status.Arm=Arm_GetStatus();
+    RemoteControl_TelemetryStatus Telemetry=RemoteControl_GetTelemetry();
+    memcpy(Status.Telemetry.Raw,Telemetry.Raw,sizeof(Status.Telemetry.Raw));
+    memcpy(Status.Telemetry.AngleCdeg,Telemetry.AngleCdeg,sizeof(Status.Telemetry.AngleCdeg));
+    Status.Telemetry.TickMs=Telemetry.TickMs;
+    Status.Telemetry.Valid=Telemetry.Valid;
+    Status.Telemetry.Online=Telemetry.HasFrame &&
+        (uint32_t)(Status.TickMs-Telemetry.TickMs)<ROBOT_TELEMETRY_TIMEOUT_MS;
     Status.Connected=Link.Connected;
     Status.Armed=Link.Armed;
     Status.ChassisTest=ChassisTest_GetStatus();

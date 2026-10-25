@@ -9,6 +9,11 @@
 #define REMOTE_CONTROL_SPEED_SCALE 1000.0f
 #define REMOTE_CONTROL_FLAG_STOP 0x01U
 #define REMOTE_CONTROL_FLAG_RESUME 0x02U
+// Extension flag: the controller is following the potentiometers and filled the
+// reserved area with joint targets. Frames without this bit keep the V3 meaning
+// and must keep Reserved[5..17] zero; receivers that do not implement the
+// extension can keep decoding the chassis fields unchanged.
+#define REMOTE_CONTROL_FLAG_ARM_TARGETS 0x04U
 // Wire layout: A5, version, sequence, flags, four little-endian int16 values,
 // 18 reserved bytes, CRC16 (0xffff init, 0xa001 polynomial), little-endian.
 typedef struct
@@ -32,6 +37,9 @@ _Static_assert(sizeof(RemoteControl_FrameTypeDef)==REMOTE_CONTROL_FRAME_SIZE, "R
 // V3: Vx/Vy/Wz as V2, M4 = arm base -1000..1000.
 // Reserved[0] = selected joint 0..3; [1..2] = joint rate int16 LE -1000..1000;
 // [3] = deploy toggle counter, [4] = gripper toggle counter; [5..17] must be zero.
+// With ARM_TARGETS: [5..14] = five int16 LE target angles in 0.1 deg
+// (base, shoulder, elbow, wrist pitch, wrist roll), [15] = calibrated mask,
+// [16] = 1, [17] = zero. The flag never appears on STOP or RESUME frames.
 // Counters are repeated until the next press, not one-frame pulses. RESUME establishes
 // a new counter baseline; queued actions never survive STOP/reconnect.
 // STOP ignores speed fields; RESUME requires all four fields zero in either version.
