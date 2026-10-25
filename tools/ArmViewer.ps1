@@ -35,13 +35,15 @@ $Cal = @(
 
 # Drawing range: the calibrated angle is placeholder data until the arm exists,
 # so the picture maps each pot over a plausible joint range. Replace these with
-# the real mechanical limits once $Cal is calibrated.
+# the real mechanical limits once $Cal is calibrated. Off is a display trim in
+# degrees: it slides the drawn joint without touching the calibrated angle, and
+# is set so the pose recorded on 2026-10-25 shows as one straight arm pointing up.
 $Draw = @(
-    @{ Min = -170; Max = 170 },   # base yaw
-    @{ Min =  -60; Max =  95 },   # shoulder, 0 = horizontal
-    @{ Min =    0; Max = 140 },   # elbow, relative bend
-    @{ Min =  -80; Max =  80 },   # wrist pitch, relative
-    @{ Min = -180; Max = 180 }    # wrist roll, tool spin
+    @{ Min = -170; Max = 170; Off =    0 },   # base yaw
+    @{ Min =  -60; Max =  95; Off =  114 },   # shoulder, 0 = horizontal
+    @{ Min =    0; Max = 140; Off =  -73 },   # elbow, relative bend
+    @{ Min =  -80; Max =  80; Off =  -80 },   # wrist pitch, relative
+    @{ Min = -180; Max = 180; Off =    0 }    # wrist roll, tool spin
 )
 
 # Link lengths in pixels for the side view.
@@ -64,7 +66,7 @@ function Convert-DegToDraw {
     # placeholder span of $Cal is 0..333 deg
     $t = $Deg / 333.0
     if ($t -lt 0) { $t = 0 } elseif ($t -gt 1) { $t = 1 }
-    return $R.Min + $t * ([double]($R.Max - $R.Min))
+    return $R.Min + $t * ([double]($R.Max - $R.Min)) + [double]$R.Off
 }
 
 # --- sample model -----------------------------------------------------------
@@ -293,9 +295,9 @@ function Render {
 
     $sideW = [int]($W * 0.62)
     $rad = [Math]::PI / 180.0
-    $l1 = 0.26 * $H
-    $l2 = 0.23 * $H
-    $l3 = 0.11 * $H
+    $l1 = 0.22 * $H
+    $l2 = 0.19 * $H
+    $l3 = 0.09 * $H
 
     # --- side view ---
     $ox = [double]($sideW * 0.36)
@@ -338,7 +340,9 @@ function Render {
     $g.DrawEllipse($script:ThinPen, [float]($cx - $R * 0.62), [float]($cy - $R * 0.62), [float](2 * $R * 0.62), [float](2 * $R * 0.62))
     $g.DrawLine($script:GridPen, [float]($cx - $R), [float]$cy, [float]($cx + $R), [float]$cy)
     $g.DrawLine($script:GridPen, [float]$cx, [float]($cy - $R), [float]$cx, [float]($cy + $R))
-    $yaw = $f[0] * $rad
+    # positive base angle is drawn counter-clockwise seen from above; negate here
+    # because the pot on the base runs the other way round.
+    $yaw = -$f[0] * $rad
     $tx = $cx + $R * [Math]::Sin($yaw); $ty = $cy - $R * [Math]::Cos($yaw)
     $g.DrawLine($script:JointPen, [float]$cx, [float]$cy, [float]$tx, [float]$ty)
     $g.DrawString(('TOP VIEW  base {0:F1}' -f $f[0]), $script:FontBig, $script:Dim, [float]($sideW + 16), [float]14)
