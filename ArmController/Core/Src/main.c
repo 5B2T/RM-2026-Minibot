@@ -100,7 +100,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     ArmController_Step();
-    HAL_Delay(1);
+    // No delay here: the step already paces its work on HAL_GetTick, and the UART
+    // drain only moves one byte per pass, so sleeping would cap the debug output.
   }
   /* USER CODE END 3 */
 }
