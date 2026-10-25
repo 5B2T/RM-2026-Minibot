@@ -14,11 +14,20 @@ param(
     [string]$Replay = '',
     [string]$SelfTest = '',
     [string]$Shot = '',
-    [int]$AutoClose = 0
+    [int]$AutoClose = 0,
+    [switch]$Connect
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+
+# Declare DPI awareness before any window is created, otherwise Windows stretches
+# the whole (DPI-unaware) window and the drawing ends up blurry and partly off
+# screen on scaled displays.
+try {
+    Add-Type -Namespace Win -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    [void][Win.Dpi]::SetProcessDPIAware()
+} catch { }
 
 # --- calibration ------------------------------------------------------------
 # Mirrors DefaultCal in ArmController/UserApp/arm_targets.c. Edit these numbers
@@ -33,19 +42,21 @@ $Cal = @(
     @{ Name = 'WRISTR';   AdcMin = 0; AdcMax = 4095; DegMin = 0; DegMax = 333; Dir = 1 }
 )
 
-# Drawing range: the calibrated angle is placeholder data until the arm exists,
-# so the picture maps each pot over a plausible joint range. Sign flips the joint
-# when the pot runs backwards, Off slides it in degrees; both are display trims
-# and must go back to +1 / 0 once $Cal carries real endpoints.
-# Off values were aligned on 2026-10-25 with the pose recorded in build/snap2.txt
-# (one straight arm up, then the portal shape).
+# Drawing trim: the calibrated angle is placeholder data until the arm exists, so
+# the picture maps each pot over a plausible joint range. Span = degrees the joint
+# travels over the whole pot, Zero slides it, Sign flips the joint when the pot
+# runs backwards. All three are display trims and go back to the values below once
+# $Cal carries real endpoints. Tune them live with 1-5 / arrows / S / 0.
 $Draw = @(
-    @{ Min = -170; Max = 170; Sign = -1; Off =    0 },   # base yaw, pot runs backwards
-    @{ Min =  -60; Max =  95; Sign =  1; Off =  113 },   # shoulder, 0 = horizontal
-    @{ Min =    0; Max = 140; Sign =  1; Off = -123 },   # elbow, relative bend
-    @{ Min =  -80; Max =  80; Sign =  1; Off =  -55 },   # wrist pitch, relative
-    @{ Min = -180; Max = 180; Sign =  1; Off =    0 }    # wrist roll, tool spin
+    @{ Name = 'BASE';    Sign = -1; Span = 340; Zero = -170 },  # base yaw, pot runs backwards
+    @{ Name = 'SHOULDER';Sign =  1; Span = 155; Zero =   53 },  # 0 = horizontal
+    @{ Name = 'ELBOW';   Sign =  1; Span = 140; Zero = -123 },  # relative bend
+    @{ Name = 'WRISTP';  Sign =  1; Span = 160; Zero = -135 },  # relative pitch
+    @{ Name = 'WRISTR';  Sign =  1; Span = 360; Zero = -180 }   # tool spin
 )
+$DrawHome = @()
+foreach ($r in $Draw) { $DrawHome += @{ Sign = $r.Sign; Span = $r.Span; Zero = $r.Zero } }
+$script:TuneJoint = 1
 
 # Link lengths in pixels for the side view.
 $L1 = 165.0
@@ -67,7 +78,7 @@ function Convert-DegToDraw {
     # placeholder span of $Cal is 0..333 deg
     $t = $Deg / 333.0
     if ($t -lt 0) { $t = 0 } elseif ($t -gt 1) { $t = 1 }
-    return $R.Sign * ($R.Min + $t * ([double]($R.Max - $R.Min))) + [double]$R.Off
+    return $R.Sign * ($R.Span * $t + [double]$R.Zero)
 }
 
 # --- sample model -----------------------------------------------------------
@@ -165,11 +176,26 @@ $script:GridPen   = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromA
 $script:Font   = New-Object System.Drawing.Font 'Consolas', 9
 $script:FontBig = New-Object System.Drawing.Font 'Consolas', 11, ([System.Drawing.FontStyle]::Bold)
 
+if (-not ('BufferedPanel' -as [type])) {
+    Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @'
+using System.Windows.Forms;
+public class BufferedPanel : Panel {
+    public BufferedPanel() {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                 ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        UpdateStyles();
+    }
+    protected override void OnPaintBackground(PaintEventArgs e) { }
+}
+'@
+}
+
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'ARM TWIN - custom controller'
 $form.ClientSize = New-Object System.Drawing.Size(980, 640)
 $form.BackColor = $C0
 $form.StartPosition = 'CenterScreen'
+$form.KeyPreview = $true
 
 $bar = New-Object System.Windows.Forms.Panel
 $bar.Dock = 'Top'
@@ -177,7 +203,7 @@ $bar.Height = 34
 $bar.BackColor = [System.Drawing.Color]::FromArgb(32, 35, 40)
 $form.Controls.Add($bar)
 
-$panel = New-Object System.Windows.Forms.Panel
+$panel = New-Object BufferedPanel
 $panel.Dock = 'Fill'
 $panel.BackColor = $C0
 $form.Controls.Add($panel)
@@ -382,6 +408,11 @@ function Render {
     $line1 = '{0}   {1}   {2}   {3}   {4}   keys={5}' -f $st, $validTxt, $potTxt, $mode, $ackTxt, $script:State.Keys
     $g.DrawString($line1, $script:Font, $brush, [float]20, [float]($H - 52))
     $g.DrawString(('frames {0}   port {1}' -f $script:State.Lines, $script:State.Port), $script:Font, $script:Dim, [float]20, [float]($H - 30))
+
+    $tj = $script:TuneJoint
+    $tune = 'TUNE J{0} {1}  span {2}  zero {3}  sign {4}    [1-5] joint  [up/dn] zero  [lt/rt] span  [s] sign  [0] reset  [w] save' -f `
+    ($tj + 1), $Draw[$tj].Name, $Draw[$tj].Span, $Draw[$tj].Zero, $(if ($Draw[$tj].Sign -lt 0) { '-1' } else { '+1' })
+    $g.DrawString($tune, $script:Font, $script:Warn, [float]20, [float]($H - 74))
 }
 
 $panel.Add_Paint({
@@ -432,6 +463,39 @@ $btnConnect.Add_Click({
     }
 })
 
+$form.Add_KeyDown({
+    param($sender, $e)
+    $K = $e.KeyCode
+    for ($i = 0; $i -lt 5; $i++) {
+        if ($K -eq ([int][System.Windows.Forms.Keys]::D1 + $i)) {
+            $script:TuneJoint = $i
+            $e.Handled = $true
+            $panel.Invalidate()
+            return
+        }
+    }
+    $j = $script:TuneJoint
+    $fine = 5
+    if ($e.Shift) { $fine = 1 }
+    if ($K -eq [System.Windows.Forms.Keys]::Up) { $Draw[$j].Zero += $fine }
+    elseif ($K -eq [System.Windows.Forms.Keys]::Down) { $Draw[$j].Zero -= $fine }
+    elseif ($K -eq [System.Windows.Forms.Keys]::Right) { $Draw[$j].Span += $fine }
+    elseif ($K -eq [System.Windows.Forms.Keys]::Left) { $Draw[$j].Span -= $fine }
+    elseif ($K -eq [System.Windows.Forms.Keys]::S) { $Draw[$j].Sign = 0 - $Draw[$j].Sign }
+    elseif ($K -eq [System.Windows.Forms.Keys]::D0) {
+        $Draw[$j].Sign = $DrawHome[$j].Sign
+        $Draw[$j].Span = $DrawHome[$j].Span
+        $Draw[$j].Zero = $DrawHome[$j].Zero
+    }
+    elseif ($K -eq [System.Windows.Forms.Keys]::W) {
+        $rows = @()
+        foreach ($r in $Draw) { $rows += ('{0} sign={1} span={2} zero={3}' -f $r.Name, $r.Sign, $r.Span, $r.Zero) }
+        [System.IO.File]::WriteAllLines((Join-Path $PSScriptRoot 'ArmViewer.tune.txt'), [string[]]$rows)
+    }
+    $e.Handled = $true
+    $panel.Invalidate()
+})
+
 $form.Add_FormClosing({
     $timer.Stop()
     Close-Serial
@@ -469,6 +533,11 @@ if ($Shot -ne '') {
 }
 
 $timer.Start()
+
+if ($Connect -and $Replay -eq '') {
+    Open-Serial -Name $cmbPort.Text
+    if ($null -ne $script:Serial) { $btnConnect.Text = 'Disconnect' }
+}
 
 if ($AutoClose -gt 0) {
     $t2 = New-Object System.Windows.Forms.Timer
