@@ -25,7 +25,7 @@ $ErrorActionPreference = 'Stop'
 # the whole (DPI-unaware) window and the drawing ends up blurry and partly off
 # screen on scaled displays.
 try {
-    Add-Type -Namespace Win -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    Add-Type -Namespace Win -Name Dpi -WarningAction SilentlyContinue -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
     [void][Win.Dpi]::SetProcessDPIAware()
 } catch { }
 
@@ -49,10 +49,10 @@ $Cal = @(
 # $Cal carries real endpoints. Tune them live with 1-5 / arrows / S / 0.
 $Draw = @(
     @{ Name = 'BASE';    Sign = -1; Span = 340; Zero = -170 },  # base yaw, pot runs backwards
-    @{ Name = 'SHOULDER';Sign =  1; Span = 155; Zero =   53 },  # 0 = horizontal
-    @{ Name = 'ELBOW';   Sign =  1; Span = 140; Zero = -123 },  # relative bend
-    @{ Name = 'WRISTP';  Sign =  1; Span = 160; Zero = -135 },  # relative pitch
-    @{ Name = 'WRISTR';  Sign =  1; Span = 360; Zero = -180 }   # tool spin
+    @{ Name = 'SHOULDER';Sign = -1; Span = 335; Zero =  193 },  # measured 2026-10-25
+    @{ Name = 'ELBOW';   Sign =  1; Span = 315; Zero = -163 },  # relative bend
+    @{ Name = 'WRISTP';  Sign = -1; Span = 300; Zero = -155 },  # relative pitch
+    @{ Name = 'WRISTR';  Sign =  1; Span = 360; Zero = -180 }   # tool spin (not calibrated yet)
 )
 $DrawHome = @()
 foreach ($r in $Draw) { $DrawHome += @{ Sign = $r.Sign; Span = $r.Span; Zero = $r.Zero } }
@@ -375,15 +375,9 @@ function Render {
     # --- readout ---
     $x0 = [float]($sideW + 24)
     $y = 330
-    $g.DrawString('POT         ADC    DEG     ADC 0..4095', $script:Font, $script:Dim, $x0, [float]($y - 22))
+    $g.DrawString('POT         ADC      DEG', $script:Font, $script:Dim, $x0, [float]($y - 22))
     for ($i = 0; $i -lt 5; $i++) {
-        $g.DrawString(('{0,-10} {1,4}  {2,6:F1}' -f $Cal[$i].Name, $script:State.Raw[$i], $script:State.Deg[$i]), $script:Font, $script:Ink, $x0, [float]($y + $i * 20))
-        $bw = 130.0
-        $bx = [float]($x0 + 215)
-        $g.FillRectangle($script:Track, $bx, [float]($y + $i * 20 + 4), [float]$bw, [float]9)
-        $frac = [double]$script:State.Raw[$i] / 4095.0
-        if ($frac -lt 0) { $frac = 0 } elseif ($frac -gt 1) { $frac = 1 }
-        $g.FillRectangle($script:Accent, $bx, [float]($y + $i * 20 + 4), [float]($bw * $frac), [float]9)
+        $g.DrawString(('{0,-10} {1,4}  {2,8:F1}' -f $Cal[$i].Name, $script:State.Raw[$i], $script:State.Deg[$i]), $script:Font, $script:Ink, $x0, [float]($y + $i * 20))
     }
 
     # --- status ---
