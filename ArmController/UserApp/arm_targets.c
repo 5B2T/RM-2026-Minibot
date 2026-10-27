@@ -106,14 +106,15 @@ void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
     }
     Snapshot.ValidMask = Mask;
     Snapshot.Stable = Stable;
-    if (Controller_GetStatus().Mode != REMOTE_ACTIVE) Active = 0;
+    Remote_Status Status = Controller_GetStatus();
+    if (Status.Mode != REMOTE_ACTIVE || !Status.InputValid) Active = 0;
     if (Leave) Active = 0;
     if (Toggle)
     {
         if (Active) Active = 0;
         // Pot mode only takes over an already armed remote: entering while locked would
         // let the arm jump the moment the operator arms.
-        else if (Stable && Mask == MaskAll && Controller_GetStatus().Mode == REMOTE_ACTIVE)
+        else if (Stable && Mask == MaskAll && Status.Mode == REMOTE_ACTIVE && Status.InputValid)
         {
             Active = 1;
             // Enter on the current pose: the main controller ramps from there.
@@ -136,7 +137,8 @@ void ArmTargets_Apply(RemoteControl_FrameTypeDef *Frame)
     if (Frame == NULL || !Active || Mask != MaskAll) return;
     if (Frame->Version != REMOTE_CONTROL_VERSION_ROBOT) return;
     if (Frame->Flags & (REMOTE_CONTROL_FLAG_STOP | REMOTE_CONTROL_FLAG_RESUME)) return;
-    if (Controller_GetStatus().Mode != REMOTE_ACTIVE) return;
+    Remote_Status Status = Controller_GetStatus();
+    if (Status.Mode != REMOTE_ACTIVE || !Status.InputValid) return;
     Frame->Flags |= REMOTE_CONTROL_FLAG_ARM_TARGETS;
     for (uint8_t i = 0; i < ARM_TARGET_CHANNELS; i++)
     {

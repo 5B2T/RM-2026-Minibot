@@ -12,13 +12,25 @@ typedef struct
     uint32_t Channel;
 } MotorChannel;
 static const MotorChannel Channels[BSP_MOTOR_COUNT]=BOARD_MOTOR_MAP;
+static uint8_t ChassisEnabled,BaseEnabled;
+static void ApplyStandby(void)
+{
+    HAL_GPIO_WritePin(BOARD_STBY_1_PORT,BOARD_STBY_1_PIN,ChassisEnabled?GPIO_PIN_SET:GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BOARD_STBY_2_PORT,BOARD_STBY_2_PIN,ChassisEnabled?GPIO_PIN_SET:GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BOARD_STBY_3_PORT,BOARD_STBY_3_PIN,BaseEnabled?GPIO_PIN_SET:GPIO_PIN_RESET);
+}
+void BSP_Motor_SetBaseEnabled(uint8_t Enabled)
+{
+    BaseEnabled=Enabled!=0;
+    ApplyStandby();
+}
 
 void BSP_Motor_Disable(void)
 {
-    HAL_GPIO_WritePin(BOARD_STBY_1_PORT, BOARD_STBY_1_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(BOARD_STBY_2_PORT, BOARD_STBY_2_PIN, GPIO_PIN_RESET);
     for(uint8_t i=0;i<BSP_MOTOR_COUNT;i++)
         __HAL_TIM_SET_COMPARE(Channels[i].Timer, Channels[i].Channel, 0);
+    ChassisEnabled=0;
+    ApplyStandby();
 }
 
 uint8_t BSP_Motor_Init(void)
@@ -40,8 +52,8 @@ uint8_t BSP_Motor_Init(void)
 
 void BSP_Motor_Enable(void)
 {
-    HAL_GPIO_WritePin(BOARD_STBY_1_PORT, BOARD_STBY_1_PIN, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(BOARD_STBY_2_PORT, BOARD_STBY_2_PIN, GPIO_PIN_SET);
+    ChassisEnabled=1;
+    ApplyStandby();
 }
 
 void BSP_Motor_Load(const int PWM[BSP_MOTOR_COUNT])

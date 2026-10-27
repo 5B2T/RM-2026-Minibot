@@ -1,13 +1,16 @@
 #include "arm/bsp_arm.h"
 #include "board_config.h"
+#include "motor/bsp_motor.h"
 #include <stddef.h>
 typedef struct {TIM_HandleTypeDef *Timer;uint32_t Channel;} ServoChannel;
 static const ServoChannel Servos[BSP_ARM_SERVO_COUNT]=BOARD_ARM_SERVO_MAP;
 static uint8_t Ready;
+// Retain last nonzero hardware observation for debugger diagnosis after a timed stop.
+static volatile struct {uint32_t Samples,StbyHigh,PwmPinHigh;int Requested;uint32_t Compare;} BaseTrace;
 static void BaseStop(void)
 {
-    HAL_GPIO_WritePin(BOARD_ARM_STBY_PORT,BOARD_ARM_STBY_PIN,GPIO_PIN_RESET);
     __HAL_TIM_SET_COMPARE(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL,0);
+    BSP_Motor_SetBaseEnabled(0);
 }
 static uint8_t PulsesValid(const uint16_t *Pulse)
 {
@@ -52,10 +55,22 @@ uint8_t BSP_Arm_Apply(const uint16_t PulseUs[BSP_ARM_SERVO_COUNT], int BasePWM)
     if(BasePWM==0)BaseStop();
     else
     {
+        // Break before changing polarity; repeated same-direction updates do not interrupt PWM.
+        GPIO_PinState Direction=BasePWM>0?GPIO_PIN_SET:GPIO_PIN_RESET;
+        if(HAL_GPIO_ReadPin(BOARD_ARM_IN1_PORT,BOARD_ARM_IN1_PIN)!=Direction)
+        {
+            __HAL_TIM_SET_COMPARE(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL,0);
+            BSP_Motor_SetBaseEnabled(0);
+        }
         HAL_GPIO_WritePin(BOARD_ARM_IN1_PORT,BOARD_ARM_IN1_PIN,BasePWM>0?GPIO_PIN_SET:GPIO_PIN_RESET);
         HAL_GPIO_WritePin(BOARD_ARM_IN2_PORT,BOARD_ARM_IN2_PIN,BasePWM>0?GPIO_PIN_RESET:GPIO_PIN_SET);
         __HAL_TIM_SET_COMPARE(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL,BasePWM<0?-BasePWM:BasePWM);
-        HAL_GPIO_WritePin(BOARD_ARM_STBY_PORT,BOARD_ARM_STBY_PIN,GPIO_PIN_SET);
+        BSP_Motor_SetBaseEnabled(1);
+        BaseTrace.Requested=BasePWM;
+        BaseTrace.Compare=__HAL_TIM_GET_COMPARE(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL);
+        BaseTrace.Samples++;
+        BaseTrace.StbyHigh+=HAL_GPIO_ReadPin(BOARD_ARM_STBY_PORT,BOARD_ARM_STBY_PIN)==GPIO_PIN_SET;
+        BaseTrace.PwmPinHigh+=HAL_GPIO_ReadPin(BOARD_ARM_PWM_PORT,BOARD_ARM_PWM_PIN)==GPIO_PIN_SET;
     }
     return 1;
 }

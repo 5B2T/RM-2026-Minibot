@@ -8,5 +8,5 @@
 uint8_t BSP_Arm_Init(const uint16_t InitialPulseUs[BSP_ARM_SERVO_COUNT]);
 uint8_t BSP_Arm_Apply(const uint16_t PulseUs[BSP_ARM_SERVO_COUNT], int BasePWM);
 uint16_t BSP_Arm_EncoderCount(void);
-void BSP_Arm_Disable(void); // Fault path: all PWM off, base STBY low.
+void BSP_Arm_Disable(void); // All arm PWM off and base STBY low; chassis is unchanged.
 #endif

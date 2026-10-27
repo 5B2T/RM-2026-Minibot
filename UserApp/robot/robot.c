@@ -21,7 +21,7 @@ static uint8_t Ready;
 static uint8_t DisplayScheduled;
 static uint32_t DisplayTick,DisplayDelay;
 static struct {Arm_Command Command;uint32_t CreatedMs;uint8_t Pending,Stop;} ArmMailbox;
-static uint8_t RadioSeen,ArmRadioOwned;
+static uint8_t RadioSeen,ArmRadioOwned,ArmTargetOwned;
 static uint32_t RadioStopGeneration;
 _Static_assert(RX_PLOAD_WIDTH==REMOTE_CONTROL_FRAME_SIZE, "Radio payload must match protocol");
 
@@ -31,7 +31,7 @@ uint8_t Robot_Init(void)
     memset(&StatusSnapshot, 0, sizeof(StatusSnapshot));
     RadioRecoveryPending=0;
     memset(&ArmMailbox,0,sizeof(ArmMailbox));
-    RadioSeen=ArmRadioOwned=0;RadioStopGeneration=0;
+    RadioSeen=ArmRadioOwned=ArmTargetOwned=0;RadioStopGeneration=0;
     RemoteControl_Init();
     ChassisTest_Init();
     PowerMonitor_Init();
@@ -77,7 +77,7 @@ uint8_t Robot_ArmSubmit(const Arm_Command *Command)
     taskEXIT_CRITICAL();
     return Accepted;
 }
-static void ArmControlStep(float DtS,uint32_t NowMs,RemoteControl_LinkStatus Link)
+static void ArmControlStep(float DtS,uint32_t NowMs)
 {
     Arm_Command Command;uint32_t CreatedMs;uint8_t Pending,Stop;
     taskENTER_CRITICAL();
@@ -85,13 +85,26 @@ static void ArmControlStep(float DtS,uint32_t NowMs,RemoteControl_LinkStatus Lin
     Pending=ArmMailbox.Pending;Stop=ArmMailbox.Stop;
     ArmMailbox.Pending=ArmMailbox.Stop=0;
     taskEXIT_CRITICAL();
-    RemoteControl_ArmInput Input=RemoteControl_TakeArmInput();
+    RemoteControl_ArmSnapshot Snapshot=RemoteControl_TakeArmSnapshot();
+    NowMs=BSP_TimeMs(); // A communication task may have delivered a newer frame before the snapshot.
+    RemoteControl_ArmInput Input=Snapshot.Input;
+    RemoteControl_LinkStatus Link=Snapshot.Link;
     if(Link.Connected || Link.StopGeneration!=RadioStopGeneration)RadioSeen=1;
     if(Link.StopGeneration!=RadioStopGeneration)Stop=1;
     RadioStopGeneration=Link.StopGeneration;
     if(RadioSeen && (!Link.Connected || !Link.Armed))Stop=1;
     // Local commissioning remains available before radio use, with its own lease.
-    if(Stop) {Arm_Stop();ArmRadioOwned=0;}
+    if(Stop) {Arm_Stop();ArmRadioOwned=ArmTargetOwned=0;}
+    else if(Snapshot.Targets.Valid)
+    {
+        ArmRadioOwned=ArmTargetOwned=1;
+        (void)Arm_FollowTargets(Snapshot.Targets.AngleDeg,Input.Gripper,Snapshot.Targets.TickMs,NowMs);
+    }
+    else if(ArmTargetOwned)
+    {
+        // Explicit mode exit: one stopped control cycle before accepting stick input.
+        Arm_Stop();ArmTargetOwned=0;ArmRadioOwned=Input.Enabled;
+    }
     else if(Input.Enabled)
     {
         if(!ArmRadioOwned)Arm_Stop();
@@ -124,7 +137,7 @@ void Robot_ControlStep(float DtS)
     Chassis_GetFeedback(&Status);
     Status.TickMs=BSP_TimeMs();
     Link=RemoteControl_GetLinkStatus();
-    ArmControlStep(DtS,Status.TickMs,Link);
+    ArmControlStep(DtS,Status.TickMs);
     Status.Arm=Arm_GetStatus();
     RemoteControl_TelemetryStatus Telemetry=RemoteControl_GetTelemetry();
     memcpy(Status.Telemetry.Raw,Telemetry.Raw,sizeof(Status.Telemetry.Raw));

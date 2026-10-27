@@ -5,7 +5,8 @@ typedef enum {DEBUG_PAGE_CHASSIS_TEST=0,DEBUG_PAGE_STATUS,DEBUG_PAGE_SPEED,DEBUG
 // Display task owns initialization, rendering and transfers. Returns next delay in ms.
 uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs);
 void DebugDisplay_Init(void); // Software reset before scheduler start.
-// Service task polls raw keys, including when the OLED is offline.
+// PA15: short select, hold enter/back; chassis double-click start, press stop.
+// BackPressed is retained for API compatibility and ignored (PE6 is J5 PWM).
 void DebugDisplay_HandleKeys(uint8_t NextPressed,uint8_t BackPressed,uint32_t NowMs);
 // Task-context/debugger hooks for selecting diagnostic views.
 void DebugDisplay_SetPage(DebugDisplay_Page Page);

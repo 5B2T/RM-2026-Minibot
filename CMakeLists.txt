@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/arm/bsp_arm.c
     Bsp/uart/bsp_debug_uart.c
     Modules/actuator/servo.c
+    Modules/actuator/base_motor.c
     Modules/display/oled.c
     Modules/power/ina219.c
     Modules/power/battery_soc.c

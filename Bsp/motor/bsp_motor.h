@@ -6,6 +6,7 @@
 // Initialize before scheduling; all output APIs belong to the control task afterwards.
 uint8_t BSP_Motor_Init(void);
 void BSP_Motor_Enable(void);
-void BSP_Motor_Disable(void); // STBY low: high impedance, not active braking.
+void BSP_Motor_Disable(void); // Clear chassis PWM/STBY; independent M5 base is unchanged.
+void BSP_Motor_SetBaseEnabled(uint8_t Enabled); // M5 base STBY PD7, control-task only.
 void BSP_Motor_Load(const int PWM[BSP_MOTOR_COUNT]); // Signed PWM, clamped to +/-999.
 #endif

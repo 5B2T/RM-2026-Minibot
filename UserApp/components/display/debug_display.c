@@ -15,23 +15,24 @@ static uint8_t Started,RetryPending,FrameClockValid,KeysStarted;
 static uint32_t RetryTick,FrameTick;
 static uint32_t MenuRevision,SeenRevision;
 typedef struct {uint8_t Raw,Stable;uint32_t ChangeTick;} Display_Key;
-static Display_Key NextKey,BackKey;
+static Display_Key NextKey;
 static const char *const PageNames[]={"CHASSIS TEST","STATUS","SPEED","PWM","POWER","POT ADC"};
 static const char *const TestNames[]={"COMBO","M1+","M2+","M3+","M4+"};
+static const unsigned MotorNumbers[]={1,2,3,4};
 static const char *const ActionNames[]={"FWD","BACK","LEFT","RIGHT","CCW","CW"};
 _Static_assert(sizeof(PageNames)/sizeof(PageNames[0])==DEBUG_PAGE_COUNT,"OLED page names mismatch");
 _Static_assert(sizeof(TestNames)/sizeof(TestNames[0])==CHASSIS_TEST_COUNT,"Chassis preset names mismatch");
-static uint8_t TestAwaitRelease,TestBackDown,TestBackConsumed;
-static uint32_t TestBackTick;
+static uint8_t KeyDown,KeyConsumed,KeyAwaitRelease,TestClickPending,TestSecondClick;
+static uint32_t KeyPressTick,TestClickTick;
 
 void DebugDisplay_Init(void)
 {
     Menu=(DebugDisplay_State){.Page=DEBUG_PAGE_CHASSIS_TEST,.MainMenu=1};
     Started=RetryPending=FrameClockValid=KeysStarted=0;
     MenuRevision=SeenRevision=0;
-    TestAwaitRelease=TestBackDown=TestBackConsumed=0;TestBackTick=0;
+    KeyDown=KeyConsumed=KeyAwaitRelease=TestClickPending=TestSecondClick=0;KeyPressTick=TestClickTick=0;
     memset(&NextKey,0,sizeof(NextKey));
-    memset(&BackKey,0,sizeof(BackKey));
+
 }
 // 1: debounced press, 2: debounced release. Held-at-boot keys require release first.
 static uint8_t KeyUpdate(Display_Key *Key,uint8_t Raw,uint32_t NowMs)
@@ -42,63 +43,65 @@ static uint8_t KeyUpdate(Display_Key *Key,uint8_t Raw,uint32_t NowMs)
     Key->Stable=Raw;
     return Raw?1:2;
 }
+static void ResetGesture(void)
+{
+    KeyDown=KeyConsumed=TestClickPending=TestSecondClick=0;KeyAwaitRelease=1;
+}
 void DebugDisplay_HandleKeys(uint8_t NextPressed,uint8_t BackPressed,uint32_t NowMs)
 {
+    (void)BackPressed; // PE6 is J5 PWM, never a menu key.
     taskENTER_CRITICAL();
     if(!KeysStarted)
     {
         KeysStarted=1;
         NextKey=(Display_Key){.Raw=NextPressed!=0,.Stable=NextPressed!=0};
-        BackKey=(Display_Key){.Raw=BackPressed!=0,.Stable=BackPressed!=0};
-        taskEXIT_CRITICAL();
-        return;
+        taskEXIT_CRITICAL();return;
     }
-    uint8_t NextEvent=KeyUpdate(&NextKey,NextPressed,NowMs);
-    uint8_t BackEvent=KeyUpdate(&BackKey,BackPressed,NowMs);
-    if(!Menu.MainMenu && Menu.Page==DEBUG_PAGE_CHASSIS_TEST)
+    uint8_t Event=KeyUpdate(&NextKey,NextPressed,NowMs);
+    if(KeyAwaitRelease)
     {
-        // The PE6 press used to enter the page must be released before any run gesture.
-        if(TestAwaitRelease)
+        if(!NextPressed && !NextKey.Stable)KeyAwaitRelease=0;
+        taskEXIT_CRITICAL();return;
+    }
+    uint8_t TestPage=!Menu.MainMenu && Menu.Page==DEBUG_PAGE_CHASSIS_TEST;
+    if(Event==1)
+    {
+        KeyDown=1;KeyConsumed=0;KeyPressTick=NowMs;TestSecondClick=0;
+        if(TestPage)
         {
-            if(!BackKey.Stable && !BackPressed)TestAwaitRelease=0;
-        }
-        else
-        {
-            if(NextEvent==1)
-            {ChassisTest_Next();TestBackConsumed=1;MenuRevision++;}
-            if(BackEvent==1)
+            if(ChassisTest_GetStatus().Running)
+            {ChassisTest_Stop();KeyConsumed=1;TestClickPending=0;}
+            else if(TestClickPending)
             {
-                TestBackDown=1;TestBackTick=NowMs;
-                TestBackConsumed=NextKey.Stable || NextPressed || ChassisTest_GetStatus().Running;
-                if(TestBackConsumed)ChassisTest_Stop();
-            }
-            if(TestBackDown && BackKey.Stable && BackPressed &&
-               (uint32_t)(NowMs-TestBackTick)>=ROBOT_CHASSIS_TEST_BACK_HOLD_MS)
-            {
-                ChassisTest_Close();Menu.MainMenu=1;MenuRevision++;
-                TestBackDown=0;TestBackConsumed=1;
-            }
-            else if(BackEvent==2 && TestBackDown)
-            {
-                if(!TestBackConsumed && !NextPressed && !NextKey.Stable)
-                    ChassisTest_Toggle(NowMs);
-                TestBackDown=0;MenuRevision++;
+                if((uint32_t)(NowMs-TestClickTick)<ROBOT_BUTTON_DOUBLE_MS)TestSecondClick=1;
+                else {ChassisTest_Next();TestClickPending=0;MenuRevision++;}
             }
         }
     }
-    else if(BackEvent==1)
+    if(KeyDown && NextKey.Stable && NextPressed &&
+       (uint32_t)(NowMs-KeyPressTick)>=ROBOT_BUTTON_HOLD_MS)
     {
-        if(Menu.MainMenu)Menu.Page=(DebugDisplay_Page)Menu.Cursor;
-        Menu.MainMenu=!Menu.MainMenu;
-        if(!Menu.MainMenu && Menu.Page==DEBUG_PAGE_CHASSIS_TEST)
-        {TestAwaitRelease=1;TestBackDown=0;}
-        MenuRevision++;
+        // Hold only navigates. It can never start a chassis test on the way back.
+        if(Menu.MainMenu){Menu.Page=(DebugDisplay_Page)Menu.Cursor;Menu.MainMenu=0;}
+        else {ChassisTest_Close();Menu.MainMenu=1;}
+        MenuRevision++;ResetGesture();
     }
-    else if(Menu.MainMenu && NextEvent==1 && !BackPressed && !BackKey.Stable)
+    else if(Event==2 && KeyDown)
     {
-        Menu.Cursor=(uint8_t)((Menu.Cursor+1)%DEBUG_PAGE_COUNT);
-        MenuRevision++;
+        if(!KeyConsumed)
+        {
+            if(Menu.MainMenu){Menu.Cursor=(uint8_t)((Menu.Cursor+1)%DEBUG_PAGE_COUNT);MenuRevision++;}
+            else if(TestPage)
+            {
+                if(TestSecondClick){ChassisTest_Toggle(NowMs);TestClickPending=0;MenuRevision++;}
+                else {TestClickPending=1;TestClickTick=NowMs;}
+            }
+        }
+        KeyDown=0;TestSecondClick=0;
     }
+    if(TestClickPending && !NextPressed && !NextKey.Stable &&
+       (uint32_t)(NowMs-TestClickTick)>=ROBOT_BUTTON_DOUBLE_MS)
+    {ChassisTest_Next();TestClickPending=0;MenuRevision++;}
     taskEXIT_CRITICAL();
 }
 
@@ -110,8 +113,8 @@ void DebugDisplay_SetPage(DebugDisplay_Page Page)
     Menu.MainMenu=0;
     Menu.Cursor=(uint8_t)Page;
     MenuRevision++;
-    if(Page==DEBUG_PAGE_CHASSIS_TEST) {TestAwaitRelease=1;TestBackDown=0;}
-    else ChassisTest_Close();
+    ResetGesture();
+    if(Page!=DEBUG_PAGE_CHASSIS_TEST)ChassisTest_Close();
     taskEXIT_CRITICAL();
 }
 void DebugDisplay_NextPage(void)
@@ -121,8 +124,8 @@ void DebugDisplay_NextPage(void)
     Menu.MainMenu=0;
     Menu.Cursor=(uint8_t)Menu.Page;
     MenuRevision++;
-    if(Menu.Page==DEBUG_PAGE_CHASSIS_TEST) {TestAwaitRelease=1;TestBackDown=0;}
-    else ChassisTest_Close();
+    ResetGesture();
+    if(Menu.Page!=DEBUG_PAGE_CHASSIS_TEST)ChassisTest_Close();
     taskEXIT_CRITICAL();
 }
 void DebugDisplay_ShowMenu(void)
@@ -130,7 +133,7 @@ void DebugDisplay_ShowMenu(void)
     taskENTER_CRITICAL();
     Menu.MainMenu=1;
     MenuRevision++;
-    ChassisTest_Close();TestBackDown=0;
+    ChassisTest_Close();ResetGesture();
     taskEXIT_CRITICAL();
 }
 DebugDisplay_State DebugDisplay_GetState(void)
@@ -177,7 +180,7 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             (void)snprintf(Text,sizeof(Text),"%s %s",View.Cursor==i?">":" ",PageNames[i]);
             Line((uint8_t)(i+1),Text);
         }
-        Line(7,"PA15:NEXT PE6:ENTER");
+        Line(7,"TAP:NEXT HOLD:ENTER");
         return;
     }
     (void)snprintf(Text,sizeof(Text),"%u/%u %s",(unsigned)View.Page+1,(unsigned)DEBUG_PAGE_COUNT,
@@ -198,13 +201,14 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         Line(1,Text);
         for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
         {
-            (void)snprintf(Text,sizeof(Text),"M%u %+5ld / %+5ld",i+1,
+            (void)snprintf(Text,sizeof(Text),"M%u %+5ld / %+5ld",MotorNumbers[i],
                 Scaled(Status->TargetSpeed[i],1000,9999),Scaled(Status->MeasuredSpeed[i],1000,9999));
             Line((uint8_t)(i+2),Text);
         }
         if(Test->Fault==CHASSIS_TEST_NO_ENCODER || Test->Fault==CHASSIS_TEST_REVERSED_ENCODER)
         {
-            (void)snprintf(Text,sizeof(Text),"%s M%u",Test->Fault==CHASSIS_TEST_NO_ENCODER?"NO ENC":"ENC SIGN",(unsigned)Test->FaultWheel);
+            unsigned Motor=Test->FaultWheel>=1 && Test->FaultWheel<=4?MotorNumbers[Test->FaultWheel-1]:0;
+            (void)snprintf(Text,sizeof(Text),"%s M%u",Test->Fault==CHASSIS_TEST_NO_ENCODER?"NO ENC":"ENC SIGN",Motor);
             Line(6,Text);
         }
         else if(Test->Fault==CHASSIS_TEST_OK && Preset==CHASSIS_TEST_COMBINED)
@@ -221,7 +225,7 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
             Test->Fault==CHASSIS_TEST_REMOTE_STOP?"REMOTE STOP":
             Test->Fault==CHASSIS_TEST_BAD_SAMPLE?"SAMPLE ERROR":
             Test->Fault==CHASSIS_TEST_STALE_START?"START EXPIRED":"PA15:NEXT SET/ACT");
-        Line(7,Test->Running?"PE6:STOP HOLD:BACK":"PE6:RUN HOLD:BACK");
+        Line(7,Test->Running?"TAP:STOP HOLD:BACK":"2TAP:RUN HOLD:BACK");
         return;
     }
     else if(View.Page==DEBUG_PAGE_STATUS)
@@ -288,17 +292,17 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
         for(unsigned i=0;i<ROBOT_WHEEL_COUNT;i++)
         {
             if(View.Page==DEBUG_PAGE_SPEED)
-                (void)snprintf(Text,sizeof(Text),"M%u %+5ld %+5ld",i+1,
+                (void)snprintf(Text,sizeof(Text),"M%u %+5ld %+5ld",MotorNumbers[i],
                     Scaled(Status->TargetSpeed[i],1000,9999),Scaled(Status->MeasuredSpeed[i],1000,9999));
-            else (void)snprintf(Text,sizeof(Text),"M%u %+4ld",i+1,Scaled(Status->PWM[i],1,999));
+            else (void)snprintf(Text,sizeof(Text),"M%u %+4ld",MotorNumbers[i],Scaled(Status->PWM[i],1,999));
             Line((uint8_t)(i+2),Text);
         }
         if(View.Page==DEBUG_PAGE_PWM)
             (void)snprintf(Text,sizeof(Text),"LIMIT: %ld MM/S",Scaled(ROBOT_WHEEL_SPEED_LIMIT_MPS,1000,9999));
-        else (void)snprintf(Text,sizeof(Text),"PHYSICAL M1..M4");
+        else (void)snprintf(Text,sizeof(Text),"M1 M2 M3 M4");
         Line(6,Text);
     }
-    Line(7,"PE6: BACK TO MENU");
+    Line(7,"PA15 HOLD: MENU");
 }
 uint32_t DebugDisplay_Step(const Robot_Status *Status, uint32_t NowMs)
 {

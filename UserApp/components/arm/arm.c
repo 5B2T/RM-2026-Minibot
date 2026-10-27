@@ -1,6 +1,7 @@
 #include "components/arm/arm.h"
 #include "robot/robot_config.h"
 #include "actuator/servo.h"
+#include "actuator/base_motor.h"
 #include "arm/bsp_arm.h"
 #include <math.h>
 #include <stddef.h>
@@ -19,6 +20,8 @@ static uint16_t LastCount;
 static uint32_t SequenceStarted,StageStarted,JointDuration[ARM_SERVO_COUNT];
 static float SequenceValues[ARM_SERVO_COUNT];
 static uint8_t RemoteManual,ReturnStep;
+static BaseMotor_Controller BaseControl;
+static float BaseRate;
 static const Arm_Joint SequenceJoints[]={ARM_SHOULDER,ARM_ELBOW,ARM_WRIST_PITCH,ARM_WRIST_ROLL,ARM_GRIPPER};
 static const uint8_t ReturnOrder[]={2,1,3,0};
 _Static_assert(ARM_SERVO_COUNT==BSP_ARM_SERVO_COUNT,"Arm servo mapping mismatch");
@@ -52,6 +55,7 @@ static void Halt(void)
     State.SequenceRunning=0;
     RemoteManual=0;
     for(uint8_t i=0;i<ARM_SERVO_COUNT;i++) {State.Rate[i]=0;Target[i]=State.CommandedAngleDeg[i];}
+    BaseRate=0;BaseMotor_Stop(&BaseControl);State.BaseTargetRpm=0;
     State.BasePWM=0;State.Active=0;State.Action=ARM_STOP;
 }
 static void HardwareFault(void)
@@ -60,6 +64,7 @@ static void HardwareFault(void)
 }
 static void SetZero(void)
 {
+    (void)BaseMotor_Init(&BaseControl,&BaseControl.Config);
     LastCount=BSP_Arm_EncoderCount();State.BaseCounts=0;
     State.BaseRelativeAngleDeg=State.BaseRpm=0;
     State.ZeroGeneration++;
@@ -76,6 +81,8 @@ uint8_t Arm_Init(void)
     Arm_Disable();
     memset(&State,0,sizeof(State));State.SelectedJoint=ARM_SHOULDER;
     memcpy(Servos,DefaultServos,sizeof(Servos));
+    const BaseMotor_Config BaseConfig=ROBOT_ARM_BASE_CONTROL_CONFIG;
+    if(!BaseMotor_Init(&BaseControl,&BaseConfig)){HardwareFault();return 0;}
     for(uint8_t i=0;i<ARM_SERVO_COUNT;i++)
     {
         if(!isfinite(PositionMin[i]) || !isfinite(PositionMax[i]) || PositionMin[i]<0 ||
@@ -241,7 +248,10 @@ uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs
     if(Command->Action!=ARM_STOP && (uint32_t)(NowMs-CreatedMs)>=Command->DurationMs)
     {Arm_Stop();State.Fault=ARM_EXPIRED;return 0;}
     if(Command->Action==ARM_INITIALIZE)return StartSequence(NowMs);
-    Arm_Stop();if(!State.Ready)return 0;
+    // Host keepalive renews the same base RATE without resetting its PI/ramp.
+    if(!(Command->Action==ARM_RATE && Command->Joint==ARM_BASE && State.Active &&
+         State.Action==ARM_RATE && State.SelectedJoint==ARM_BASE))Arm_Stop();
+    if(!State.Ready)return 0;
     State.Fault=ARM_OK;
     if(Command->Action==ARM_STOP)return 1;
     if(Command->Action==ARM_ZERO)
@@ -271,7 +281,7 @@ uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs
             State.PositionEnabledMask|=(uint8_t)(1U<<Command->Joint);
             Target[Command->Joint]=Command->Value;
         }
-        else if(Command->Joint==ARM_BASE)State.BasePWM=(int16_t)(Command->Value*ROBOT_ARM_BASE_PWM_LIMIT*ROBOT_ARM_BASE_MOTOR_SIGN);
+        else if(Command->Joint==ARM_BASE)BaseRate=Command->Value;
         else
         {
             State.Rate[Command->Joint]=Command->Value;
@@ -280,6 +290,40 @@ uint8_t Arm_Request(const Arm_Command *Command,uint32_t CreatedMs,uint32_t NowMs
     return 1;
 }
 void Arm_ResetSampling(void) {LastCount=BSP_Arm_EncoderCount();}
+static void ToggleGripper(void)
+{
+    if(!ROBOT_ARM_GRIPPER_CALIBRATED)return;
+    Target[ARM_GRIPPER]=Target[ARM_GRIPPER]==ROBOT_ARM_GRIPPER_OPEN_DEG?
+                       ROBOT_ARM_GRIPPER_CLOSED_DEG:ROBOT_ARM_GRIPPER_OPEN_DEG;
+    State.PositionEnabledMask|=(uint8_t)(1U<<ARM_GRIPPER);
+}
+uint8_t Arm_FollowTargets(const float AngleDeg[5],uint8_t Gripper,uint32_t CreatedMs,uint32_t NowMs)
+{
+    if(!State.Ready)return 0;
+    if(AngleDeg==NULL){Arm_Stop();State.Fault=ARM_INVALID_COMMAND;return 0;}
+    for(unsigned i=0;i<4;i++)
+        if(!isfinite(AngleDeg[i+1]) || Servos[i].Mode!=SERVO_POSITION)
+        {Arm_Stop();State.Fault=ARM_INVALID_COMMAND;return 0;}
+    if((uint32_t)(NowMs-CreatedMs)>=ROBOT_REMOTE_TIMEOUT_MS)
+    {Arm_Stop();State.Fault=ARM_EXPIRED;return 0;}
+    if(State.Action!=ARM_FOLLOW)
+    {
+        Arm_Stop();if(!State.Ready)return 0;
+    }
+    State.SequencePose=ARM_SEQUENCE_UNKNOWN;
+    State.Action=ARM_FOLLOW;State.Active=1;State.Fault=ARM_OK;
+    BaseRate=0;State.BasePWM=0;Started=CreatedMs;Duration=ROBOT_REMOTE_TIMEOUT_MS;
+    for(unsigned i=0;i<4;i++)
+    {
+        float Value=AngleDeg[i+1];
+        if(Value<PositionMin[i])Value=PositionMin[i];
+        if(Value>PositionLimit(i))Value=PositionLimit(i);
+        Target[i]=Value;State.Rate[i]=0;
+        State.PositionEnabledMask|=(uint8_t)(1U<<i);
+    }
+    if(Gripper)ToggleGripper();
+    return 1;
+}
 void Arm_RemoteInput(float Base,Arm_Joint Joint,float Rate,uint8_t Initialize,uint8_t Gripper,uint32_t NowMs)
 {
     if(!State.Ready)return;
@@ -304,14 +348,12 @@ void Arm_RemoteInput(float Base,Arm_Joint Joint,float Rate,uint8_t Initialize,ui
     for(unsigned i=0;i<ARM_SERVO_COUNT;i++)State.Rate[i]=0;
     State.SelectedJoint=Joint;State.Action=ARM_REMOTE;State.Active=1;State.Fault=ARM_OK;
     Started=NowMs;Duration=ROBOT_REMOTE_TIMEOUT_MS;
-    State.BasePWM=(int16_t)(Base*ROBOT_ARM_BASE_PWM_LIMIT*ROBOT_ARM_BASE_MOTOR_SIGN);
+    BaseRate=Base;
     State.Rate[Joint]=Rate;
     if(Rate!=0 && Servos[Joint].Mode==SERVO_POSITION)State.PositionEnabledMask|=(uint8_t)(1U<<Joint);
     if(Gripper)
     {
-        Target[ARM_GRIPPER]=Target[ARM_GRIPPER]==ROBOT_ARM_GRIPPER_OPEN_DEG?
-                           ROBOT_ARM_GRIPPER_CLOSED_DEG:ROBOT_ARM_GRIPPER_OPEN_DEG;
-        State.PositionEnabledMask|=(uint8_t)(1U<<ARM_GRIPPER);
+        ToggleGripper();
     }
 }
 void Arm_Step(float DtS,uint32_t NowMs)
@@ -326,10 +368,13 @@ void Arm_Step(float DtS,uint32_t NowMs)
     State.BaseRelativeAngleDeg=(float)State.BaseCounts*360.0f/ROBOT_ARM_BASE_CPR;
     if(!isfinite(DtS) || DtS<=0 || DtS>ROBOT_ARM_MAX_SAMPLE_S)
     {State.BaseRpm=0;Arm_Stop();State.Fault=ARM_BAD_SAMPLE;return;}
-    State.BaseRpm=(float)Delta*60.0f/(ROBOT_ARM_BASE_CPR*DtS);
+    State.BaseRawRpm=(float)Delta*60.0f/(ROBOT_ARM_BASE_CPR*DtS);
     if(State.SequenceRunning)SequenceStep(NowMs);
     else if(State.Active && (uint32_t)(NowMs-Started)>=Duration)
     {Arm_Stop();State.Fault=ARM_EXPIRED;}
+    State.BasePWM=(int16_t)(BaseMotor_Step(&BaseControl,BaseRate,State.BaseRawRpm,DtS)*ROBOT_ARM_BASE_MOTOR_SIGN);
+    State.BaseRpm=BaseControl.FilteredRpm;State.BaseTargetRpm=BaseControl.TargetRpm;
+    if(BaseControl.Fault && BaseRate!=0){Arm_Stop();State.Fault=ARM_BASE_FEEDBACK_ERROR;}
     for(uint8_t i=0;i<ARM_SERVO_COUNT;i++)
     {
         if(Servos[i].Mode!=SERVO_POSITION)continue;

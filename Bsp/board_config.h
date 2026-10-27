@@ -4,18 +4,21 @@
 #include "main.h"
 #include "tim.h"
 
-// Physical channels M1..M4. Wheel position/polarity still needs vehicle verification.
+// Final wiring 2026-10-27: TB1->M4, TB2->M3, TB3->M1, TB4->M2, TB5->M5(base).
+// Chassis array remains [M1(FL),M2(FR),M3(RL),M4(RR)]; M5 is the base.
 #define BOARD_MOTOR_MAP { \
-    {GPIOB,GPIO_PIN_0,GPIOB,GPIO_PIN_1,&htim1,TIM_CHANNEL_1}, \
-    {GPIOB,GPIO_PIN_2,GPIOB,GPIO_PIN_10,&htim1,TIM_CHANNEL_2}, \
     {GPIOD,GPIO_PIN_0,GPIOD,GPIO_PIN_1,&htim1,TIM_CHANNEL_3}, \
-    {GPIOD,GPIO_PIN_2,GPIOD,GPIO_PIN_3,&htim1,TIM_CHANNEL_4} }
-// AB: PA0/1, PA6/7, PA5/PB3, PC6/7. All timer ARR values are 65535.
-#define BOARD_ENCODER_MAP {&htim5,&htim3,&htim2,&htim8}
+    {GPIOD,GPIO_PIN_2,GPIOD,GPIO_PIN_3,&htim1,TIM_CHANNEL_4}, \
+    {GPIOB,GPIO_PIN_2,GPIOB,GPIO_PIN_10,&htim1,TIM_CHANNEL_2}, \
+    {GPIOB,GPIO_PIN_0,GPIOB,GPIO_PIN_1,&htim1,TIM_CHANNEL_1} }
+// AB for M1/M2/M3/M4: PA5/PB3, PC6/7, PA6/7, PA0/1.
+#define BOARD_ENCODER_MAP {&htim2,&htim8,&htim3,&htim5}
 #define BOARD_STBY_1_PORT GPIOB
 #define BOARD_STBY_1_PIN GPIO_PIN_11
 #define BOARD_STBY_2_PORT GPIOD
 #define BOARD_STBY_2_PIN GPIO_PIN_4
+#define BOARD_STBY_3_PORT GPIOD
+#define BOARD_STBY_3_PIN GPIO_PIN_7
 #define BOARD_RADIO_CE_PORT GPIOC
 #define BOARD_RADIO_CE_PIN GPIO_PIN_5
 #define BOARD_RADIO_CSN_PORT GPIOD
@@ -28,18 +31,18 @@
 #define BOARD_I2C_MAX_WRITE_SIZE 33U
 #define BOARD_I2C_LOCK_TIMEOUT_MS 5U
 #define BOARD_I2C_WRITE_TIMEOUT_MS 10U
-// Core-board SW2 / SW4, pressed connects to GND; internal pull-ups enabled.
+// Core-board PA15 only, active low. PE6 is now J5 PWM: do not press its board button.
 #define BOARD_BUTTON_NEXT_PORT GPIOA
 #define BOARD_BUTTON_NEXT_PIN GPIO_PIN_15
-#define BOARD_BUTTON_BACK_PORT GPIOE
-#define BOARD_BUTTON_BACK_PIN GPIO_PIN_6
 
 // J1 shoulder, J2 elbow, J3 wrist pitch, J4 wrist roll, J5 gripper.
 #define BOARD_ARM_SERVO_MAP { \
     {&htim9,TIM_CHANNEL_1},{&htim10,TIM_CHANNEL_1}, \
-    {&htim11,TIM_CHANNEL_1},{&htim12,TIM_CHANNEL_1},{&htim12,TIM_CHANNEL_2} }
+    {&htim11,TIM_CHANNEL_1},{&htim12,TIM_CHANNEL_1},{&htim9,TIM_CHANNEL_2} }
 #define BOARD_ARM_BASE_TIMER htim13
 #define BOARD_ARM_BASE_CHANNEL TIM_CHANNEL_1
+#define BOARD_ARM_PWM_PORT GPIOF
+#define BOARD_ARM_PWM_PIN GPIO_PIN_8
 #define BOARD_ARM_ENCODER_TIMER htim4
 #define BOARD_ARM_IN1_PORT GPIOD
 #define BOARD_ARM_IN1_PIN GPIO_PIN_5

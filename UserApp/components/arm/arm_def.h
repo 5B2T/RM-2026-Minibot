@@ -3,17 +3,17 @@
 #include <stdint.h>
 #define ARM_SERVO_COUNT 5U
 typedef enum {ARM_SHOULDER=0,ARM_ELBOW,ARM_WRIST_PITCH,ARM_WRIST_ROLL,ARM_GRIPPER,ARM_BASE,ARM_JOINT_COUNT} Arm_Joint;
-typedef enum {ARM_STOP=0,ARM_PRESET,ARM_POSITION,ARM_RATE,ARM_NEUTRAL,ARM_ZERO,ARM_INITIALIZE,ARM_REMOTE} Arm_Action;
+typedef enum {ARM_STOP=0,ARM_PRESET,ARM_POSITION,ARM_RATE,ARM_NEUTRAL,ARM_ZERO,ARM_INITIALIZE,ARM_REMOTE,ARM_FOLLOW} Arm_Action;
 typedef enum {ARM_SEQUENCE_ZERO=0,ARM_SEQUENCE_DEPLOYED,ARM_SEQUENCE_UNKNOWN} Arm_SequencePose;
 typedef struct
 {
     Arm_Action Action;
     Arm_Joint Joint;
-    float Value; // POS: J1 10..150, J2 23..180, J3 13..270, J4 0..180, J5 0..30 deg.
+    float Value; // POS: J1 10..150, J2 23..180, J3 22..270, J4 0..180, J5 6..30 deg.
                  // RATE -1..1: positive raises J1/J2/J3 (J3 angle decreases).
     uint32_t DurationMs; // Requests expire, including preset and queued zero confirmation.
 } Arm_Command;
-typedef enum {ARM_OK=0,ARM_EXPIRED,ARM_INVALID_COMMAND,ARM_BAD_SAMPLE,ARM_HARDWARE_ERROR,ARM_NEEDS_ZERO,ARM_NEEDS_CALIBRATION} Arm_Fault;
+typedef enum {ARM_OK=0,ARM_EXPIRED,ARM_INVALID_COMMAND,ARM_BAD_SAMPLE,ARM_HARDWARE_ERROR,ARM_NEEDS_ZERO,ARM_NEEDS_CALIBRATION,ARM_BASE_FEEDBACK_ERROR} Arm_Fault;
 typedef struct
 {
     float CommandedAngleDeg[ARM_SERVO_COUNT]; // Position joints only; valid after PositionEnabledMask is set, not measured.
@@ -21,6 +21,7 @@ typedef struct
     uint16_t PulseUs[ARM_SERVO_COUNT];
     int64_t BaseCounts; // Relative to last software zero, no absolute homing.
     float BaseRelativeAngleDeg,BaseRpm;
+    float BaseRawRpm,BaseTargetRpm; // Filtered BaseRpm remains in the existing CSV slot.
     int16_t BasePWM;
     uint32_t TickMs;
     Arm_Joint SelectedJoint;

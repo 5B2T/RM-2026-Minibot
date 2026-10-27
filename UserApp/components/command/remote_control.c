@@ -19,6 +19,7 @@ typedef struct
     uint8_t Sequence;
     uint32_t StopGeneration;
     RemoteControl_ArmInput Arm;
+    RemoteControl_ArmTargets Targets;
     uint8_t DeployCounter,GripperCounter;
 }RemoteControl_StateTypeDef;
 
@@ -37,6 +38,7 @@ static void RemoteControl_ClearConnection(void)
     RemoteControl_State.Mode=ROBOT_COMMAND_WHEELS;
     memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
     memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
+    memset(&RemoteControl_State.Targets,0,sizeof(RemoteControl_State.Targets));
 }
 
 void RemoteControl_Disconnect(void)
@@ -115,6 +117,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
 
     if(Stop)
     {
+        RemoteControl_State.Targets.Valid=0;
         RemoteControl_State.StopGeneration++;
         RemoteControl_State.Armed=0;
         RemoteControl_State.MotionValid=0;
@@ -125,6 +128,7 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     }
     else if(Resume)
     {
+        RemoteControl_State.Targets.Valid=0;
         memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
         RemoteControl_State.DeployCounter=Frame.Reserved[3];
         RemoteControl_State.GripperCounter=Frame.Reserved[4];
@@ -135,12 +139,25 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     }
     else if(RemoteControl_State.Armed)
     {
+        RemoteControl_State.Targets.Valid=0;
         RemoteControl_State.Mode=Frame.Version!=REMOTE_CONTROL_VERSION_WHEELS?
                                   ROBOT_COMMAND_VELOCITY:ROBOT_COMMAND_WHEELS;
         memcpy(RemoteControl_State.Target, Target, sizeof(Target));
         RemoteControl_State.MotionValid=1;
         if(Frame.Version==REMOTE_CONTROL_VERSION_ROBOT)
         {
+            if(Frame.Flags&REMOTE_CONTROL_FLAG_ARM_TARGETS)
+            {
+                RemoteControl_ArmTargets *Targets=&RemoteControl_State.Targets;
+                for(unsigned i=0;i<5;i++)
+                {
+                    int32_t Value=(uint16_t)Frame.Reserved[5+2*i]|
+                                  ((uint16_t)Frame.Reserved[6+2*i]<<8);
+                    if(Value>=32768)Value-=65536;
+                    Targets->AngleDeg[i]=(float)Value/10.0f;
+                }
+                Targets->TickMs=Now;Targets->Valid=1;
+            }
             RemoteControl_ArmInput *Arm=&RemoteControl_State.Arm;
             Arm->Enabled=1;Arm->Joint=Frame.Reserved[0];Arm->Base=Target[3];
             int32_t Rate=(uint16_t)Frame.Reserved[1]|((uint16_t)Frame.Reserved[2]<<8);
@@ -203,14 +220,26 @@ RemoteControl_LinkStatus RemoteControl_GetLinkStatus(void)
 }
 RemoteControl_ArmInput RemoteControl_TakeArmInput(void)
 {
+    return RemoteControl_TakeArmSnapshot().Input;
+}
+RemoteControl_ArmSnapshot RemoteControl_TakeArmSnapshot(void)
+{
     taskENTER_CRITICAL();
-    RemoteControl_Expire(BSP_TimeMs());
-    RemoteControl_ArmInput Input=RemoteControl_State.Arm;
-    Input.Enabled=Input.Enabled && RemoteControl_State.HasFrame && RemoteControl_State.Armed &&
+    uint32_t Now=BSP_TimeMs();RemoteControl_Expire(Now);
+    RemoteControl_ArmSnapshot Snapshot={0};
+    Snapshot.Input=RemoteControl_State.Arm;
+    Snapshot.Input.Enabled=Snapshot.Input.Enabled && RemoteControl_State.HasFrame && RemoteControl_State.Armed &&
                   RemoteControl_State.MotionValid && !RemoteControl_State.StopPending;
+    Snapshot.Targets=RemoteControl_State.Targets;
+    Snapshot.Targets.Valid=Snapshot.Targets.Valid && Snapshot.Input.Enabled;
+    Snapshot.Link.LastRxTick=RemoteControl_State.LastRxTick;
+    Snapshot.Link.StopGeneration=RemoteControl_State.StopGeneration;
+    Snapshot.Link.Connected=RemoteControl_State.HasFrame &&
+                           (uint32_t)(Now-RemoteControl_State.LastRxTick)<ROBOT_REMOTE_TIMEOUT_MS;
+    Snapshot.Link.Armed=Snapshot.Link.Connected && RemoteControl_State.Armed && !RemoteControl_State.StopPending;
     RemoteControl_State.Arm.Initialize=RemoteControl_State.Arm.Gripper=0;
     taskEXIT_CRITICAL();
-    return Input;
+    return Snapshot;
 }
 RemoteControl_TelemetryStatus RemoteControl_GetTelemetry(void)
 {

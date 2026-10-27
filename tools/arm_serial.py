@@ -140,10 +140,10 @@ def main():
                              "position_servos": "commanded, not measured",
                              "base_reference": "relative to this MCU boot",
                              "servo_travel_deg": [300, 300, 270, 180, 180],
-                             "mechanical_min_deg": [10, 23, 13, 0, 0],
+                             "mechanical_min_deg": [10, 23, 22, 0, 6],
                              "mechanical_max_deg": [150, 180, 270, 180, 30],
                              "jog_direction": [1, 1, -1, 1, 1],
-                             "mechanical_limits": "user-confirmed 2026-10-22; old poses must not be replayed",
+                             "mechanical_limits": "user-confirmed 2026-10-25; old poses must not be replayed",
                              "position_enabled_mask": sample["position_enabled_mask"]}
                     args.output.parent.mkdir(parents=True, exist_ok=True)
                     with args.output.open("a", encoding="utf-8") as stream:
