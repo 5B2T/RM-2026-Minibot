@@ -5,12 +5,14 @@
 #include <stdlib.h>
 static Remote_Status Status;
 static uint16_t Centers[4],Candidate[4],RawKeys,StableKeys;
-static uint8_t KeyStarted,CenterStarted,AwaitingAck,JointCentered;
-static uint32_t KeyTick,CenterTick,ResumeTick,UpdateTick,InvalidTick;
+static uint8_t KeyStarted,CenterStarted,AwaitingAck,JointCentered,TxFailures,ExplicitStop;
+static uint32_t KeyTick,CenterTick,ResumeTick,UpdateTick;
 static const int8_t Signs[4]=REMOTE_AXIS_SIGNS;
 static uint8_t Neutral(void){for(unsigned i=0;i<4;i++)if(Status.Axis[i]!=0)return 0;return 1;}
 static void Lock(Remote_LockReason Reason,uint32_t NowMs)
 {
+ // An operator STOP must dominate even when the diagnostic first cause is RF loss.
+ if(Reason==REMOTE_LOCK_STOP_KEY || Reason==REMOTE_LOCK_INTERNAL)ExplicitStop=1;
  // Preserve the first cause of each lock; retries/secondary failures cannot overwrite it.
  if(Status.Mode!=REMOTE_LOCKED || Status.LastLockReason==REMOTE_LOCK_STARTUP)
  {Status.LastLockReason=Reason;Status.LastLockMs=NowMs;Status.LockCount++;}
@@ -20,7 +22,7 @@ static void Lock(Remote_LockReason Reason,uint32_t NowMs)
 void Controller_Lock(void)
 {Lock(REMOTE_LOCK_INTERNAL,UpdateTick);}
 void Controller_Init(void)
-{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=JointCentered=0;RawKeys=StableKeys=0;UpdateTick=InvalidTick=0;}
+{memset(&Status,0,sizeof(Status));KeyStarted=CenterStarted=AwaitingAck=JointCentered=0;RawKeys=StableKeys=0;UpdateTick=0;TxFailures=ExplicitStop=0;}
 static float Axis(uint16_t Raw,uint16_t Center,int8_t Sign)
 {
  int d=(int)Raw-Center;if(d>=-REMOTE_AXIS_DEADZONE&&d<=REMOTE_AXIS_DEADZONE)return 0;
@@ -51,15 +53,14 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  if(Status.Mode==REMOTE_RESUMING&&(uint32_t)(NowMs-ResumeTick)>=REMOTE_LINK_STALE_MS)Lock(REMOTE_LOCK_RESUME_TIMEOUT,NowMs);
  if(!Status.InputValid)
  {
-  // A lost frame must stop the command output, not force a re-arm: hold the mode and let the next
-  // valid frame drive again. Only a lasting loss of input locks the remote.
-  if(!InvalidTick)InvalidTick=NowMs;
+  // Input bridge loss only neutralizes manual motion. Keep an already ACTIVE
+  // radio session alive so an autonomous arm sequence can finish on the F407.
+  // Never complete a new enable handshake without valid operator inputs.
   Status.Vx=Status.Vy=Status.Wz=0;Status.ArmBase=Status.JointRate=0;
-  if(Status.Mode==REMOTE_RESUMING||(uint32_t)(NowMs-InvalidTick)>=REMOTE_INPUT_INVALID_LOCK_MS)Lock(REMOTE_LOCK_INPUT,NowMs);
+  if(Status.Mode==REMOTE_RESUMING)Lock(REMOTE_LOCK_INPUT,NowMs);
   CenterStarted=0;
   return;
  }
- InvalidTick=0;
  memcpy(Status.Raw,Input->ADC,sizeof(Status.Raw));Status.SupplyV=Input->ADC[4]*(REMOTE_ADC_REFERENCE_V*REMOTE_POWER_DIVIDER/4095.0f);
  if(!Status.Calibrated)
  {
@@ -77,7 +78,7 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  uint8_t RecoveryIdle=Idle&&!(Keys&OtherKeys)&&!(StableKeys&OtherKeys);
  // A fresh press is required; a held key across connection recovery cannot unlock.
  if((Rising&KEY_MASK(KEY_L_UP))&&RecoveryIdle&&Status.LinkAck&&Status.Mode==REMOTE_LOCKED)
- {Status.Mode=REMOTE_RESUMING;ResumeTick=NowMs;AwaitingAck=1;}
+ {Status.Mode=REMOTE_RESUMING;ResumeTick=NowMs;AwaitingAck=1;ExplicitStop=0;}
  if(Status.Mode==REMOTE_RESUMING&&!RecoveryIdle)Lock(REMOTE_LOCK_RESUME_MOVED,NowMs);
  if(Status.Mode!=REMOTE_ACTIVE)return;
  Status.Vx=Status.Axis[REMOTE_LEFT_Y_INDEX]*REMOTE_SPEED_MPS;
@@ -104,9 +105,9 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  Status.ArmBase=Status.Axis[REMOTE_RIGHT_X_INDEX];
  Status.JointRate=JointCentered?Status.Axis[REMOTE_RIGHT_Y_INDEX]:0;
  // Single actions are latched as counters so a lost frame cannot lose a press.
- // Deploy requires the arm stick centered; gripper can operate during manual motion.
+ // Deploy tolerates a small centered-stick bias; enable still requires true neutral.
  // Simultaneous action keys are ignored.
- if(Status.Axis[REMOTE_RIGHT_X_INDEX]==0 && Status.Axis[REMOTE_RIGHT_Y_INDEX]==0)
+ if(fabsf(Status.Axis[REMOTE_RIGHT_X_INDEX])<=REMOTE_DEPLOY_IDLE_RATE && fabsf(Status.Axis[REMOTE_RIGHT_Y_INDEX])<=REMOTE_DEPLOY_IDLE_RATE)
  {
   if((Rising&KEY_MASK(KEY_DEPLOY)) && !(Keys&KEY_MASK(KEY_GRIPPER)))Status.DeployCounter++;
  }
@@ -114,8 +115,12 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
 }
 void Controller_OnTx(uint8_t Flags,uint8_t Ack,uint32_t NowMs)
 {
- if(!Ack){Status.LinkAck=0;Lock(REMOTE_LOCK_TX_FAILED,NowMs);return;}
- Status.LinkAck=1;Status.LastAckMs=NowMs;
+ if(!Ack){
+  if(TxFailures<REMOTE_TX_FAILURE_LIMIT)TxFailures++;
+  if(TxFailures>=REMOTE_TX_FAILURE_LIMIT){Status.LinkAck=0;Lock(REMOTE_LOCK_TX_FAILED,NowMs);}
+  return;
+ }
+ TxFailures=0;Status.LinkAck=1;Status.LastAckMs=NowMs;
  if(Flags==REMOTE_CONTROL_FLAG_RESUME&&AwaitingAck&&Status.Mode==REMOTE_RESUMING)
  {Status.Mode=REMOTE_ACTIVE;AwaitingAck=0;}
 }
@@ -125,7 +130,8 @@ void Controller_Command(RemoteControl_FrameTypeDef *Frame,uint8_t Sequence)
  *Frame=(RemoteControl_FrameTypeDef){.Header=0xa5,.Version=REMOTE_CONTROL_VERSION_ROBOT,.Sequence=Sequence};
  Frame->Reserved[0]=Status.SelectedJoint;
  Frame->Reserved[3]=Status.DeployCounter;Frame->Reserved[4]=Status.GripperCounter;
- if(Status.Mode==REMOTE_LOCKED)Frame->Flags=REMOTE_CONTROL_FLAG_STOP;
+ if(Status.Mode==REMOTE_LOCKED)Frame->Flags=REMOTE_CONTROL_FLAG_STOP|
+     (ExplicitStop?0:REMOTE_CONTROL_FLAG_PASSIVE_STOP);
  else if(Status.Mode==REMOTE_RESUMING)Frame->Flags=REMOTE_CONTROL_FLAG_RESUME;
  else {
   Frame->M1=(int16_t)lroundf(Status.Vx*1000);Frame->M2=(int16_t)lroundf(Status.Vy*1000);Frame->M3=(int16_t)lroundf(Status.Wz*1000);

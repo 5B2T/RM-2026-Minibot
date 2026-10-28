@@ -40,6 +40,7 @@ add_subdirectory(cmake/stm32cubemx)
 # Application layers; hardware-generated files remain owned by CubeMX.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/motor/bsp_motor.c
+    Bsp/motor/bsp_emergency.c
     Bsp/encoder/bsp_encoder.c
     Bsp/radio/bsp_nrf24l01.c
     Bsp/time/bsp_time.c
@@ -49,6 +50,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/uart/bsp_debug_uart.c
     Modules/actuator/servo.c
     Modules/actuator/base_motor.c
+    Modules/actuator/base_position.c
     Modules/display/oled.c
     Modules/power/ina219.c
     Modules/power/battery_soc.c

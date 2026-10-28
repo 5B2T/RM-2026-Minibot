@@ -23,6 +23,13 @@ int main(void) {
  f=Frame(4);f.Reserved[17]=1;assert(!CommandProtocol_Encode(&f,wire));
  f=Frame(1);f.M1=100;assert(CommandProtocol_Encode(&f,wire));
  f=Frame(2);f.M1=100;assert(!CommandProtocol_Encode(&f,wire));
+ f=Frame(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_PASSIVE_STOP);
+ assert(CommandProtocol_Encode(&f,wire) && CommandProtocol_Decode(wire,32,&out));
+ assert(out.Flags==9);wire[3]^=8;assert(!CommandProtocol_Decode(wire,32,&out));
+ const uint8_t BadPassive[]={8,10,11,12,13,14,15};
+ for(unsigned i=0;i<sizeof BadPassive;i++){f=Frame(BadPassive[i]);assert(!CommandProtocol_Encode(&f,wire));}
+ for(unsigned v=1;v<=2;v++){f=Frame(9);f.Version=v;assert(!CommandProtocol_Encode(&f,wire));}
+ puts("PASS: passive STOP is CRC-protected V3 STOP only; invalid combinations rejected");
  puts("PASS V1/V2/V3, target 0.1 deg layout, reserved/mask/mode, CRC, STOP/RESUME");
  RemoteTelemetry_FrameTypeDef t={0},tele;
  t.Header=0xa5;t.Version=4;t.Flags=3;

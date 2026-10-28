@@ -14,5 +14,8 @@ void Robot_GetStatus(Robot_Status *Status);
 // Local commissioning / future command ingress. Task context, never ISR.
 // Motion requires an explicit bounded request; arm commands are not in radio frames yet.
 uint8_t Robot_ArmSubmit(const Arm_Command *Command);
+// Diagnostic-session stop never cancels a radio-owned action. Explicit ARM STOP remains global.
+uint8_t Robot_ArmDebugAvailable(void);
+void Robot_ArmDebugStop(void);
 void Robot_ArmStop(void); // Dominates queued motion, applied by control task next cycle.
 #endif

@@ -72,27 +72,33 @@
     {SERVO_POSITION,500,1500,2500,270.0f,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1}, \
     {SERVO_POSITION,500,1500,2500,180.0f,1} }
-// User-confirmed structural limits, updated 2026-10-25. Preserve electrical PWM scaling.
-#define ROBOT_ARM_POSITION_MIN_DEG {10.0f,23.0f,22.0f,0.0f,6.0f}
-#define ROBOT_ARM_POSITION_MAX_DEG {150.0f,180.0f,270.0f,180.0f,30.0f}
+// User-confirmed structural limits, updated 2026-10-28. Preserve electrical PWM scaling.
+#define ROBOT_ARM_POSITION_MIN_DEG {5.0f,23.0f,22.0f,0.0f,6.0f}
+#define ROBOT_ARM_POSITION_MAX_DEG {150.0f,180.0f,270.0f,180.0f,45.0f}
 // Positive jog / stick-up raises J1/J2/J3; J3 is higher at the SMALLER angle.
 #define ROBOT_ARM_JOG_DIRECTION {1,1,-1,1,1}
 // SW6 / INIT: J1, parallel J2/J3/J4, then open gripper.
-// Fold: J3 + close gripper together, then J2 -> J4 -> J1.
+// Fold: J3 + wrist-clear + close gripper + base zero, then J2 -> J4 -> J1.
 #define ROBOT_ARM_POSES_CALIBRATED 1U
 #define ROBOT_ARM_GRIPPER_CALIBRATED 1U
 #define ROBOT_ARM_GRIPPER_CLOSED_DEG 6.0f
-#define ROBOT_ARM_GRIPPER_OPEN_DEG 30.0f
-#define ROBOT_ARM_DEPLOY_DEG {90.0f,103.0f,270.0f,0.0f,ROBOT_ARM_GRIPPER_OPEN_DEG}
+#define ROBOT_ARM_GRIPPER_OPEN_DEG 45.0f
+#define ROBOT_ARM_DEPLOY_DEG {95.0f,103.0f,190.0f,0.0f,ROBOT_ARM_GRIPPER_OPEN_DEG}
+#define ROBOT_ARM_FOLD_WRIST_CLEAR_DEG 0.0f
+#define ROBOT_ARM_BASE_RETURN_TIMEOUT_MS 12000U
 #define ROBOT_ARM_SEQUENCE_SETTLE_MS 200U
 #define ROBOT_ARM_SEQUENCE_MAX_MS 20000U
 // User manually places these four joint angles BEFORE power-on. This is an assumed
 // reference, not measured homing; still no PWM until explicit control.
-#define ROBOT_ARM_PRESET_DEG {10.0f,23.0f,22.0f,180.0f,ROBOT_ARM_GRIPPER_CLOSED_DEG}
+#define ROBOT_ARM_PRESET_DEG {5.0f,23.0f,22.0f,90.0f,ROBOT_ARM_GRIPPER_CLOSED_DEG}
 #define ROBOT_ARM_POSITION_RATE_DPS 90.0f
 #define ROBOT_ARM_COMMAND_MAX_MS 5000U
 #define ROBOT_ARM_DEBUG_TIMEOUT_MS 300U
 #define ROBOT_ARM_MAX_SAMPLE_S 0.1f
+#define ROBOT_ARM_RECOVERY_WAIT_MS 2000U
+#define ROBOT_ARM_SEQUENCE_TRIGGER_RATE .15f
+#define ROBOT_ARM_SEQUENCE_OVERRIDE_RATE .25f
+#define ROBOT_ARM_SEQUENCE_OVERRIDE_MS 200U
 #define ROBOT_ARM_BASE_PWM_LIMIT 700
 // 11PPR * 150 reduction * x4. Confirm actual gearing before angle calibration.
 #define ROBOT_ARM_BASE_CPR 6600.0f
@@ -102,6 +108,11 @@
 // Loaded M5/TB5 speed target: 15 RPM = 90 deg/s, ramped at 20 RPM/s.
 // 2026-10-27 bench fit: speed/static feedforward 28/40, filter 30 ms, fault lease 300 ms.
 #define ROBOT_ARM_BASE_CONTROL_CONFIG {40.0f,120.0f,28.0f,40.0f,15.0f,ROBOT_ARM_BASE_PWM_LIMIT,20.0f,.03f,.12f,.3f}
+// Position mode only, relative to the manually aligned boot zero. No angular wrap.
+// +/-180 deg, 90 deg/s reference slew; P outer loop returns RPM to the speed PI.
+// Enter radio follow only within 3deg and0.4RPM. Faster P response for teaching control;
+// smaller arrival/hold band permits sub-degree corrections, still capped at joystick15RPM.
+#define ROBOT_ARM_BASE_POSITION_CONFIG {-180.0f,180.0f,15.0f,90.0f,.6f,2.0f,.3f,.7f,3.0f,.4f}
 #define ROBOT_DISPLAY_RETRY_MS 1000U
 // R100 (0.1 ohm), A0/A1 open jumpers, seven-bit address.
 // +/-320 mV covers +/-3.2 A; 0.1 mA register scaling covers that range.

@@ -19,7 +19,7 @@ static uint32_t LastContact,StreamTick,StreamMs=100,Faults,Commands,Errors,LineT
 
 static void StopSession(void)
 {
-    Enabled=0;Robot_ArmStop();
+    Enabled=0;Robot_ArmDebugStop();
 }
 static void Reply(const char *Text)
 {
@@ -45,7 +45,8 @@ static void Handle(const ArmDebug_Command *Input,uint32_t Now)
     case ARM_DEBUG_ENABLE:
     {
         Robot_Status Status;Robot_GetStatus(&Status);
-        if(!Status.Arm.Ready) {Reject("ERR NOT_READY\r\n");return;}
+        if(!Status.Arm.Ready && Status.Arm.Fault!=ARM_HARDWARE_ERROR) {Reject("ERR NOT_READY\r\n");return;}
+        if(!Robot_ArmDebugAvailable()){Reject("ERR BUSY\r\n");return;}
         Enabled=1;LastContact=Now;Reply("OK ENABLE\r\n");return;
     }
     case ARM_DEBUG_DISABLE:StopSession();Reply("OK DISABLE\r\n");return;
@@ -74,11 +75,12 @@ static void Handle(const ArmDebug_Command *Input,uint32_t Now)
     case ARM_DEBUG_PRESET:Command.Action=ARM_PRESET;break;
     case ARM_DEBUG_NEUTRAL:Command.Action=ARM_NEUTRAL;break;
     case ARM_DEBUG_ZERO:Command.Action=ARM_ZERO;break;
+    case ARM_DEBUG_CLEAR:Command.Action=ARM_CLEAR;break;
     case ARM_DEBUG_INITIALIZE:Command.Action=ARM_INITIALIZE;break;
     default:Reject("ERR SYNTAX\r\n");return;
     }
     if(!Arm_CommandValid(&Command)) {Reject("ERR RANGE\r\n");return;}
-    if(!Robot_ArmSubmit(&Command)) {Robot_ArmStop();Reply("ERR BUSY\r\n");return;}
+    if(!Robot_ArmSubmit(&Command)) {Reply("ERR BUSY\r\n");return;}
     LastContact=Now;Reply("OK QUEUED\r\n");
 }
 static long Milli(float Value)

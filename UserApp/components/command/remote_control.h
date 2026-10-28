@@ -26,6 +26,7 @@ typedef struct
 {
     uint32_t LastRxTick;
     uint32_t StopGeneration; // Advances for every valid radio STOP, including stale sequences.
+    uint32_t ExplicitStopGeneration; // Passive link/startup STOPs do not abort an autonomous arm sequence.
     uint8_t Connected;
     uint8_t Armed;
 } RemoteControl_LinkStatus;
@@ -38,7 +39,7 @@ typedef struct
 RemoteControl_ArmInput RemoteControl_TakeArmInput(void); // Control owner, consumes one-shot actions.
 typedef struct
 {
-    float AngleDeg[5]; // Wire order: base (not yet driven), J1, J2, J3, J4.
+    float AngleDeg[5]; // Wire order: base (signed relative degrees), J1, J2, J3, J4.
     uint32_t TickMs; // Last accepted target frame, NOT the time this snapshot is read.
     uint8_t Valid;
 } RemoteControl_ArmTargets;
@@ -47,6 +48,7 @@ typedef struct
     RemoteControl_ArmInput Input;
     RemoteControl_ArmTargets Targets;
     RemoteControl_LinkStatus Link;
+    uint8_t Recover; // Fresh stopped RESUME acknowledgement, consumed once.
 } RemoteControl_ArmSnapshot;
 // One atomic mode/target/STOP snapshot; consumes only button events, not target validity.
 RemoteControl_ArmSnapshot RemoteControl_TakeArmSnapshot(void);

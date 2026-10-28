@@ -68,10 +68,10 @@ uint8_t ArmDebugProtocol_Parse(const char *Line,ArmDebug_Command *Command)
         if(Count!=2)return 0;
         Result.Operation=ARM_DEBUG_INITIALIZE;Result.DurationMs=1000;
     }
-    else if(!strcmp(Verb,"ZERO"))
+    else if(!strcmp(Verb,"ZERO") || !strcmp(Verb,"CLEAR"))
     {
         if(Count!=2)return 0;
-        Result.Operation=ARM_DEBUG_ZERO;Result.DurationMs=1000;
+        Result.Operation=!strcmp(Verb,"ZERO")?ARM_DEBUG_ZERO:ARM_DEBUG_CLEAR;Result.DurationMs=1000;
     }
     else if(!strcmp(Verb,"STREAM"))
     {
@@ -100,7 +100,7 @@ uint8_t ArmDebugProtocol_Parse(const char *Line,ArmDebug_Command *Command)
         Result.Operation=!strcmp(Verb,"POS")?ARM_DEBUG_POSITION:ARM_DEBUG_RATE;
         if(Result.Operation==ARM_DEBUG_RATE && (Result.Value<-1 || Result.Value>1))return 0;
         // Hardware/joint-specific travel limits are checked by Arm_CommandValid.
-        if(Result.Operation==ARM_DEBUG_POSITION && Result.Value<0)return 0;
+        if(Result.Operation==ARM_DEBUG_POSITION && Result.Joint!=5 && Result.Value<0)return 0;
     }
     else return 0;
     *Command=Result;return 1;

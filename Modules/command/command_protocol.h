@@ -14,6 +14,9 @@
 // and must keep Reserved[5..17] zero; receivers that do not implement the
 // extension can keep decoding the chassis fields unchanged.
 #define REMOTE_CONTROL_FLAG_ARM_TARGETS 0x04U
+// V3 STOP caused by startup/link/input lock, not the operator stop key. Only
+// an already-running autonomous arm sequence may continue; manual motion stops.
+#define REMOTE_CONTROL_FLAG_PASSIVE_STOP 0x08U
 // Wire layout: A5, version, sequence, flags, four little-endian int16 values,
 // 18 reserved bytes, CRC16 (0xffff init, 0xa001 polynomial), little-endian.
 typedef struct

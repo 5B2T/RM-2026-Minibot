@@ -28,22 +28,37 @@ typedef struct
     int32_t SoftMinCdeg, SoftMaxCdeg; // Command limits in the same unit.
 } ArmTarget_Cal;
 
+typedef enum
+{
+    ARM_TARGET_ENTRY_READY = 0,
+    ARM_TARGET_ENTRY_LOCKED,
+    ARM_TARGET_ENTRY_INPUT,
+    ARM_TARGET_ENTRY_ADC,
+    ARM_TARGET_ENTRY_SETTLING,
+    ARM_TARGET_ENTRY_EXPIRED
+} ArmTarget_EntryBlock;
+
 typedef struct
 {
     uint16_t Raw[ARM_TARGET_CHANNELS];
     int32_t AngleCdeg[ARM_TARGET_CHANNELS];
     uint8_t ValidMask, Active, Stable;
     uint32_t UpdateMs;
+    uint8_t EntryPending;
+    ArmTarget_EntryBlock EntryBlock;
 } ArmTargets_Status;
 
 void ArmTargets_Init(void);
-// Keys are the debounced remote key mask; a right-stick up+down chord toggles
-// pot mode, a left+right chord leaves it, and any lock leaves it too.
+// Debounced right-stick press toggles pot mode. Entry may wait up to 3s for
+// valid pots stable for100ms; lock/input loss cancels entry. Active loss holds
+// targets for up to200ms, then exits without auto re-entry. Left+right exits too.
 void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
                        uint16_t Keys, uint32_t NowMs);
 // Injects the extension into a V3 frame. Silent unless pot mode is active.
 void ArmTargets_Apply(RemoteControl_FrameTypeDef *Frame);
 ArmTargets_Status ArmTargets_GetStatus(void);
+// V4 base is a normalized unsigned 0..333 deg display value, NOT the signed V3 target.
+uint16_t ArmTargets_TelemetryAngle(uint8_t Channel);
 // Read-only view for commissioning tools; never enumerated for modification.
 const ArmTarget_Cal *ArmTargets_Calibration(uint8_t Channel);
 #endif

@@ -36,7 +36,14 @@ void RemoteRadio_Step(uint32_t NowMs)
  Remote_Status Status=Controller_GetStatus();
  if(Status.Mode==REMOTE_LOCKED&&LastMode!=REMOTE_LOCKED)SendTick=NowMs-REMOTE_TX_PERIOD_MS;
  LastMode=Status.Mode;
- if(Pending&&Status.Mode==REMOTE_LOCKED&&Flags!=REMOTE_CONTROL_FLAG_STOP){
+ uint8_t UrgentStop=0;
+ if(Pending && Status.Mode==REMOTE_LOCKED)
+ {
+  RemoteControl_FrameTypeDef Current;Controller_Command(&Current,Sequence);
+  UrgentStop=PendingTelemetry || !(Flags&REMOTE_CONTROL_FLAG_STOP) ||
+   ((Flags&REMOTE_CONTROL_FLAG_PASSIVE_STOP) && !(Current.Flags&REMOTE_CONTROL_FLAG_PASSIVE_STOP));
+ }
+ if(UrgentStop){
   NRF24L01_Result Result=NRF24L01_TxAbort();Pending=PendingTelemetry=0;
   SendTick=NowMs-REMOTE_TX_PERIOD_MS;
   if(Result!=NRF_OK){Failure(BSP_TimeMs());return;}
@@ -48,6 +55,11 @@ void RemoteRadio_Step(uint32_t NowMs)
   if(Result!=NRF_OK){
    // A lost telemetry frame is diagnostic only: it must not lock the remote.
    if(PendingTelemetry){PendingTelemetry=0;return;}
+   if(Result==NRF_TX_MAX_RETRY){
+    // The driver already flushed the failed packet. Retry the latest command on
+    // the next normal slot, not a 500ms reinit that inevitably trips the car lease.
+    Controller_OnTx(Flags,0,BSP_TimeMs());PendingTelemetry=0;return;
+   }
    Failure(BSP_TimeMs());return;
   }
   if(!PendingTelemetry)Controller_OnTx(Flags,1,BSP_TimeMs());

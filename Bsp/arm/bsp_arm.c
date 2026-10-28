@@ -4,7 +4,7 @@
 #include <stddef.h>
 typedef struct {TIM_HandleTypeDef *Timer;uint32_t Channel;} ServoChannel;
 static const ServoChannel Servos[BSP_ARM_SERVO_COUNT]=BOARD_ARM_SERVO_MAP;
-static uint8_t Ready;
+static uint8_t Ready,EncoderStarted;
 // Retain last nonzero hardware observation for debugger diagnosis after a timed stop.
 static volatile struct {uint32_t Samples,StbyHigh,PwmPinHigh;int Requested;uint32_t Compare;} BaseTrace;
 static void BaseStop(void)
@@ -29,14 +29,20 @@ void BSP_Arm_Disable(void)
         (void)HAL_TIM_PWM_Stop(Servos[i].Timer,Servos[i].Channel);
         __HAL_TIM_SET_COMPARE(Servos[i].Timer,Servos[i].Channel,0);
     }
-    (void)HAL_TIM_Encoder_Stop(&BOARD_ARM_ENCODER_TIMER,TIM_CHANNEL_ALL);
+    // Leave the passive encoder running so a recoverable output failure does not
+    // silently lose the boot reference. Sampling remains in the control task.
 }
 uint8_t BSP_Arm_Init(const uint16_t InitialPulseUs[BSP_ARM_SERVO_COUNT])
 {
     Ready=0;BaseStop();
     if(!PulsesValid(InitialPulseUs)) {BSP_Arm_Disable();return 0;}
-    if(HAL_TIM_Encoder_Start(&BOARD_ARM_ENCODER_TIMER,TIM_CHANNEL_ALL)!=HAL_OK ||
-       HAL_TIM_PWM_Start(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL)!=HAL_OK)
+    if(!EncoderStarted)
+    {
+        if(HAL_TIM_Encoder_Start(&BOARD_ARM_ENCODER_TIMER,TIM_CHANNEL_ALL)!=HAL_OK)
+        {BSP_Arm_Disable();return 0;}
+        EncoderStarted=1;
+    }
+    if(HAL_TIM_PWM_Start(&BOARD_ARM_BASE_TIMER,BOARD_ARM_BASE_CHANNEL)!=HAL_OK)
     {BSP_Arm_Disable();return 0;}
     for(uint8_t i=0;i<BSP_ARM_SERVO_COUNT;i++)
     {

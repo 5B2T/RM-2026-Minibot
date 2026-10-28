@@ -29,7 +29,9 @@ uint8_t CommandProtocol_Decode(const uint8_t *Data, uint8_t Length,
                          Data[1]!=REMOTE_CONTROL_VERSION_VELOCITY &&
                          Data[1]!=REMOTE_CONTROL_VERSION_ROBOT))return 0;
     if(Data[3]&~(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME|
-                  REMOTE_CONTROL_FLAG_ARM_TARGETS))return 0;
+                  REMOTE_CONTROL_FLAG_ARM_TARGETS|REMOTE_CONTROL_FLAG_PASSIVE_STOP))return 0;
+    if((Data[3]&REMOTE_CONTROL_FLAG_PASSIVE_STOP) &&
+       (Data[1]!=REMOTE_CONTROL_VERSION_ROBOT || Data[3]!=(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_PASSIVE_STOP)))return 0;
     if((Data[3]&REMOTE_CONTROL_FLAG_ARM_TARGETS) &&
        (Data[1]!=REMOTE_CONTROL_VERSION_ROBOT ||
         (Data[3]&(REMOTE_CONTROL_FLAG_STOP|REMOTE_CONTROL_FLAG_RESUME))))return 0;

@@ -280,7 +280,11 @@ static void Render(const Robot_Status *Status, uint32_t NowMs, DebugDisplay_Stat
                 (unsigned long)(Telemetry->AngleCdeg[i]%100U/10U));
             Line((uint8_t)(i+2),Text);
         }
-        if(Telemetry->Online)
+        if(Status->Arm.Action==ARM_FOLLOW && Status->Arm.BasePositionEnabled)
+            (void)snprintf(Text,sizeof(Text),"B%+04ld>%+04ld %s",
+                Scaled(Status->Arm.BaseRelativeAngleDeg,1,999),Scaled(Status->Arm.BasePositionTargetDeg,1,999),
+                !Status->Arm.BasePositionPickedUp?"WAIT":Status->Arm.BasePositionAtTarget?"HOLD":"RUN");
+        else if(Telemetry->Online)
             (void)snprintf(Text,sizeof(Text),"AGE %luMS",(unsigned long)(NowMs-Telemetry->TickMs));
         else Text[0]='\0';
         Line(7,Text);

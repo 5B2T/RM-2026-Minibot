@@ -8,10 +8,12 @@
 // are untouched: no command slot is ever spent on a telemetry frame.
 #define REMOTE_TELEMETRY_PERIOD_MS 100U
 #define REMOTE_LINK_STALE_MS 80U
-// Lost input stops the command output at once but only re-locks the remote after this long.
-#define REMOTE_INPUT_INVALID_LOCK_MS 200U
+#define REMOTE_TX_FAILURE_LIMIT 3U // A single exhausted on-air retry does not lock.
+// Input bridge loss sends neutral manual commands without locking an ACTIVE session.
+// Explicit STOP and radio ACK loss still lock; enabling requires valid input.
 #define REMOTE_RADIO_RETRY_MS 500U
 #define REMOTE_DEBOUNCE_MS 20U
+#define REMOTE_DEPLOY_IDLE_RATE .15f
 #define REMOTE_CENTER_WAIT_MS 500U
 #define REMOTE_AXIS_DEADZONE 160
 #define REMOTE_CENTER_MIN 1536

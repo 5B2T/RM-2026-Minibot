@@ -15,9 +15,11 @@ typedef struct
     uint8_t MotionValid;
     uint8_t StopPending;
     uint8_t ResumePending;
+    uint8_t RecoverPending;
     uint8_t SequenceKnown;
     uint8_t Sequence;
     uint32_t StopGeneration;
+    uint32_t ExplicitStopGeneration;
     RemoteControl_ArmInput Arm;
     RemoteControl_ArmTargets Targets;
     uint8_t DeployCounter,GripperCounter;
@@ -34,6 +36,7 @@ static void RemoteControl_ClearConnection(void)
     RemoteControl_State.MotionValid=0;
     RemoteControl_State.StopPending=1;
     RemoteControl_State.ResumePending=0;
+    RemoteControl_State.RecoverPending=0;
     RemoteControl_State.SequenceKnown=0;
     RemoteControl_State.Mode=ROBOT_COMMAND_WHEELS;
     memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
@@ -119,15 +122,18 @@ uint8_t RemoteControl_Process(const uint8_t* Data, uint8_t Length)
     {
         RemoteControl_State.Targets.Valid=0;
         RemoteControl_State.StopGeneration++;
+        if(!(Frame.Flags&REMOTE_CONTROL_FLAG_PASSIVE_STOP))RemoteControl_State.ExplicitStopGeneration++;
         RemoteControl_State.Armed=0;
         RemoteControl_State.MotionValid=0;
         RemoteControl_State.StopPending=1;
         RemoteControl_State.ResumePending=0;
+        RemoteControl_State.RecoverPending=0;
         memset(RemoteControl_State.Target, 0, sizeof(RemoteControl_State.Target));
         memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
     }
     else if(Resume)
     {
+        if(!RemoteControl_State.Armed && !RemoteControl_State.ResumePending)RemoteControl_State.RecoverPending=1;
         RemoteControl_State.Targets.Valid=0;
         memset(&RemoteControl_State.Arm,0,sizeof(RemoteControl_State.Arm));
         RemoteControl_State.DeployCounter=Frame.Reserved[3];
@@ -213,6 +219,7 @@ RemoteControl_LinkStatus RemoteControl_GetLinkStatus(void)
     RemoteControl_LinkStatus Status={
         .LastRxTick=RemoteControl_State.LastRxTick,
         .StopGeneration=RemoteControl_State.StopGeneration,
+        .ExplicitStopGeneration=RemoteControl_State.ExplicitStopGeneration,
         .Connected=Connected,
         .Armed=Connected && RemoteControl_State.Armed && !RemoteControl_State.StopPending};
     taskEXIT_CRITICAL();
@@ -234,9 +241,12 @@ RemoteControl_ArmSnapshot RemoteControl_TakeArmSnapshot(void)
     Snapshot.Targets.Valid=Snapshot.Targets.Valid && Snapshot.Input.Enabled;
     Snapshot.Link.LastRxTick=RemoteControl_State.LastRxTick;
     Snapshot.Link.StopGeneration=RemoteControl_State.StopGeneration;
+    Snapshot.Link.ExplicitStopGeneration=RemoteControl_State.ExplicitStopGeneration;
     Snapshot.Link.Connected=RemoteControl_State.HasFrame &&
                            (uint32_t)(Now-RemoteControl_State.LastRxTick)<ROBOT_REMOTE_TIMEOUT_MS;
     Snapshot.Link.Armed=Snapshot.Link.Connected && RemoteControl_State.Armed && !RemoteControl_State.StopPending;
+    Snapshot.Recover=Snapshot.Link.Armed && RemoteControl_State.RecoverPending;
+    if(Snapshot.Recover)RemoteControl_State.RecoverPending=0;
     RemoteControl_State.Arm.Initialize=RemoteControl_State.Arm.Gripper=0;
     taskEXIT_CRITICAL();
     return Snapshot;
