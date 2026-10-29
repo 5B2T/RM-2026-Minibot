@@ -13,7 +13,7 @@ typedef enum {REMOTE_LOCK_STARTUP=0,REMOTE_LOCK_STOP_KEY,REMOTE_LOCK_INPUT,
  REMOTE_LOCK_TX_FAILED,REMOTE_LOCK_ACK_TIMEOUT,REMOTE_LOCK_RESUME_TIMEOUT,
  REMOTE_LOCK_RESUME_MOVED,REMOTE_LOCK_INTERNAL} Remote_LockReason;
 typedef struct {
- Remote_Mode Mode;uint8_t Calibrated,InputValid,LinkAck;
+ Remote_Mode Mode;uint8_t Calibrated,InputValid,LinkAck,Recovering;
  float Axis[4],Vx,Vy,Wz,SupplyV;
  float ArmBase,JointRate;
  uint8_t SelectedJoint,DeployCounter,GripperCounter;

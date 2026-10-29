@@ -23,15 +23,11 @@
 // Fallback PI gains from the original M2 tuning; measured channel overrides below.
 #define ROBOT_SPEED_KP 1200.0f
 #define ROBOT_SPEED_KI 10000.0f
-// Chassis array [M1,M2,M3,M4]; old gains follow each motor's identity.
+// Chassis array [M1,M2,M3,M4], retuned with wheels installed/suspended2026-10-29.
 // Gains use wheel-rim m/s, PWM counts and integral(error * seconds).
-// Replacement M2 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
-// M3/M4 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
-// M1 verified at +/-0.10, +/-0.25 and +/-0.35 m/s on 2026-10-15.
-// Higher-speed closed-loop operation and floor load require validation.
-#define ROBOT_SPEED_KP_BY_CHANNEL {1600.0f,ROBOT_SPEED_KP,1200.0f,1600.0f}
-#define ROBOT_SPEED_KI_BY_CHANNEL {20000.0f,16000.0f,16000.0f,20000.0f}
-// M1 suspended open-loop: PWM 750 gave ~0.537 m/s; other wheels/load pending.
+// All four verified at +/-0.10, +/-0.30 and +/-0.54m/s; floor load still pending.
+#define ROBOT_SPEED_KP_BY_CHANNEL {1400.0f,1200.0f,1600.0f,1600.0f}
+#define ROBOT_SPEED_KI_BY_CHANNEL {18000.0f,16000.0f,20000.0f,20000.0f}
 #define ROBOT_WHEEL_SPEED_LIMIT_MPS 0.54f
 // Body axes: +x forward, +y left, +wz counterclockwise viewed from above.
 // Positive wheel speed means that wheel drives the vehicle forward.
@@ -48,10 +44,10 @@
 #define ROBOT_CHASSIS_WHEELBASE_M 0.310f
 #define ROBOT_CHASSIS_TRACK_M 0.2675f
 // Indexed by chassis motors [M1,M2,M3,M4], each sign must be +1 or -1.
-// +1 preserves original software polarity, which has NOT been checked on hardware.
-#define ROBOT_MOTOR_POLARITY {1,1,1,1}
-// Preserve historical motor polarity; recheck after the wiring change.
-#define ROBOT_ENCODER_POLARITY {1,1,1,-1}
+// 2026-10-29: after sender-axis correction, user confirms rear M3/M4 reversed.
+// Correct rear drive and feedback together; front M1/M2 remain unchanged.
+#define ROBOT_MOTOR_POLARITY {-1,-1,1,1}
+#define ROBOT_ENCODER_POLARITY {-1,-1,1,1}
 // SSD1306 four-pin module, seven-bit address. No external reset GPIO.
 #define ROBOT_OLED_ADDRESS 0x3cU
 #define ROBOT_DISPLAY_POWER_WAIT_MS 200U

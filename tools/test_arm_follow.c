@@ -549,4 +549,20 @@ static void AutonomousLinkPolicy(void)
     puts("PASS: all7 sequence stages survive RF silence/passive STOP; re-enable preserves progress, old actions do not replay");
     puts("PASS: operator/host STOP overrides offline sequence; manual/pot loss still stops, feedback and deadlines retained");
 }
-int main(void){LimitsAndGripper();ArbitrationAndStop();SequenceAndFaults();FoldBaseAndWrist();FoldArrivalHysteresis();SequenceWithNeutralRadio();FoldFromOutsidePositionLimits();FollowExitAndExplicitPresets();BaseLeaseAndRecovery();BasePositionIntegration();HostIsolationAndRemoteRecovery();AutonomousLinkPolicy();return 0;}
+static void AutomaticLinkHandshake(void)
+{
+    Reset(0);ArmRadio();int16_t A[5]={0,950,1030,1900,0};RunFollow(A,10);
+    for(unsigned i=0;i<30;i++)Step();
+    float Held=Arm_GetStatus().CommandedAngleDeg[0];
+    assert(!Arm_GetStatus().Active && !Base && !LastChassis.Enabled);
+    // Relay absorbs action counters into neutral RESUME; they must not replay.
+    Deploy++;Grip++;Send(2,NULL,0,0,0);Step();
+    assert(!Arm_GetStatus().SequenceRunning && !Base);
+    Near(Arm_GetStatus().CommandedAngleDeg[0],Held);
+    Follow(A);Step();assert(Arm_GetStatus().Action==ARM_FOLLOW && !Arm_GetStatus().SequenceRunning);
+    assert(Arm_GetStatus().CommandedAngleDeg[0]>=Held);
+    // Explicit STOP is not undone by ordinary returning follow frames.
+    Send(1,NULL,0,0,0);Step();Follow(A);Step();assert(!Arm_GetStatus().Active && !Base);
+    puts("PASS: automatic neutral RESUME after100ms loss restores follow without stale events; STOP remains latched");
+}
+int main(void){LimitsAndGripper();ArbitrationAndStop();SequenceAndFaults();FoldBaseAndWrist();FoldArrivalHysteresis();SequenceWithNeutralRadio();FoldFromOutsidePositionLimits();FollowExitAndExplicitPresets();BaseLeaseAndRecovery();BasePositionIntegration();HostIsolationAndRemoteRecovery();AutonomousLinkPolicy();AutomaticLinkHandshake();return 0;}

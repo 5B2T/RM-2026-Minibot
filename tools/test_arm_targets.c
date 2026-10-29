@@ -65,20 +65,21 @@ int main(void)
     assert(!ArmTargets_GetStatus().EntryPending && ArmTargets_GetStatus().EntryBlock==ARM_TARGET_ENTRY_INPUT);
     Enter();assert(Flags()==4);
     RemoteControl_FrameTypeDef HeldFrame={.Header=0xa5,.Version=3};ArmTargets_Apply(&HeldFrame);
-    Status.InputValid=0;Pots[0]=2200;assert(Flags()==4); // Brief bridge loss freezes targets, does not exit.
+    Status.InputValid=0;Pots[0]=2200;assert(Flags()==0); // Input loss suspends output while retaining mode.
     ArmTargets_Update(Pots,1,0,320);assert(ArmTargets_GetStatus().Active);
     RemoteControl_FrameTypeDef Frozen={.Header=0xa5,.Version=3};ArmTargets_Apply(&Frozen);
-    for(unsigned i=5;i<15;i++)assert(HeldFrame.Reserved[i]==Frozen.Reserved[i]);
+    assert(Frozen.Flags==0);
     assert(ArmTargets_GetStatus().Raw[0]==2200 && ArmTargets_GetStatus().ValidMask==0x1f);
     Pots[0]=2048;
     Status.InputValid=1;ArmTargets_Update(Pots,1,0,340);assert(ArmTargets_GetStatus().Active);
     Status.InputValid=0;ArmTargets_Update(Pots,1,0,360);ArmTargets_Update(Pots,1,0,560);
-    assert(!ArmTargets_GetStatus().Active && Flags()==0);
+    assert(ArmTargets_GetStatus().Active && Flags()==0);
     Status.InputValid=1;ArmTargets_Update(Pots,1,0,580);ArmTargets_Update(Pots,1,0,700);
-    assert(!ArmTargets_GetStatus().Active); // Persistent loss requires a fresh press.
-    ArmTargets_Update(Pots,1,Chord,720);assert(Flags()==4);
-    ArmTargets_Update(Pots,0,0,740);assert(ArmTargets_GetStatus().Active && Flags()==4);
-    ArmTargets_Update(Pots,0,0,940);assert(!ArmTargets_GetStatus().Active && Flags()==0);
+    assert(ArmTargets_GetStatus().Active && Flags()==4); // Automatic continuation with fresh inputs.
+    ArmTargets_Update(Pots,1,0,720);assert(Flags()==4);
+    ArmTargets_Update(Pots,0,0,740);assert(ArmTargets_GetStatus().Active && Flags()==0);
+    ArmTargets_Update(Pots,0,0,940);assert(ArmTargets_GetStatus().Active && Flags()==0);
+    ArmTargets_Update(Pots,1,0,960);assert(ArmTargets_GetStatus().Active && Flags()==4);
     Enter();Status.Mode=REMOTE_LOCKED;assert(Flags()==0);
     ArmTargets_Update(Pots,1,0,320);assert(!ArmTargets_GetStatus().Active);
     Enter();ArmTargets_Update(Pots,1,0,320);
@@ -108,12 +109,14 @@ int main(void)
     Pots[0]=2048;ArmTargets_Update(Pots,1,0,340);assert(ArmTargets_GetStatus().Active && Flags()==4);
     Pots[2]=0;ArmTargets_Update(Pots,1,0,360);assert(ArmTargets_GetStatus().Active && Flags()==4);
     Status.InputValid=0;ArmTargets_Update(Pots,1,0,380);ArmTargets_Update(Pots,1,0,580);
-    assert(Flags()==0); // Persistent invalid input still exits.
+    assert(Flags()==0); // Persistent invalid input suspends output, retains selection.
     Pots[2]=2048;Status.InputValid=1;
     // Human-paired reference residuals, not independent measured servo accuracy.
     const struct {uint8_t Channel;uint16_t Adc;int32_t DegCdeg,Tolerance;} Cases[]={
         {0,1964,0,2},{0,3144,-10125,2},{0,2554,-5063,2},{0,784,10125,2},
-        {1,1354,9500,2},{1,2425,500,2},{1,1890,5000,6},
+        // Shoulder trial offset -20deg, same slope, clamp AFTER offset.
+        {1,1354,7500,2},{1,2425,500,2},{1,1890,3000,6},
+        {1,1,15000,0},{1,4094,500,0},
         {2,938,10300,100},{2,1837,18000,100},{2,1297,13500,100},
         {3,2023,19000,2},{3,3056,27000,2},{3,2714,24000,400},
         {4,2238,0,50},{4,3323,9000,50},{4,2776,4500,50}
@@ -124,7 +127,7 @@ int main(void)
         S=ArmTargets_GetStatus();assert(S.ValidMask&(1U<<Cases[i].Channel));
         assert(abs(S.AngleCdeg[Cases[i].Channel]-Cases[i].DegCdeg)<=Cases[i].Tolerance);
     }
-    puts("PASS: pot100ms entry,200ms frozen bridge/ADC glitch, persistent loss exit/no auto-resume, paired calibration residuals");
+    puts("PASS: pot100ms entry, bridge/ADC outage pauses and automatically continues, paired calibration residuals");
     puts("PASS: input-board loss keeps local ADC/angle diagnostics live without updating frozen motion targets");
     return 0;
 }

@@ -50,8 +50,9 @@ typedef struct
 
 void ArmTargets_Init(void);
 // Debounced right-stick press toggles pot mode. Entry may wait up to 3s for
-// valid pots stable for100ms; lock/input loss cancels entry. Active loss holds
-// targets for up to200ms, then exits without auto re-entry. Left+right exits too.
+// valid pots stable for100ms; lock/input loss cancels pending entry. An already
+// selected mode survives communication/acquisition loss with output suspended;
+// fresh valid input resumes it. Explicit STOP or a mode toggle still exits.
 void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
                        uint16_t Keys, uint32_t NowMs);
 // Injects the extension into a V3 frame. Silent unless pot mode is active.

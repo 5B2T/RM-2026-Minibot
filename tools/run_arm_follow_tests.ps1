@@ -35,6 +35,11 @@ try {
     if($LASTEXITCODE -ne 0){throw 'Radio recovery host build failed'}
     & ./build/test_radio_recovery.exe
     if($LASTEXITCODE -ne 0){throw 'Radio recovery tests failed'}
+    & gcc -std=c11 -Wall -Wextra -Werror -I tools/i2c_stubs -I tools/host_stubs -I Bsp `
+        tools/test_i2c_recovery.c Bsp/i2c/bsp_i2c.c -o build/test_i2c_recovery.exe
+    if($LASTEXITCODE -ne 0){throw 'Shared I2C host build failed'}
+    & ./build/test_i2c_recovery.exe
+    if($LASTEXITCODE -ne 0){throw 'Shared I2C recovery tests failed'}
     & gcc -std=c11 -Wall -Wextra -Werror -I tools/arm_bsp_stubs -I Bsp `
         tools/test_arm_bsp_recovery.c Bsp/arm/bsp_arm.c -o build/test_arm_bsp_recovery.exe
     if($LASTEXITCODE -ne 0){throw 'Arm BSP recovery host build failed'}

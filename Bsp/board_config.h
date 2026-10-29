@@ -4,15 +4,15 @@
 #include "main.h"
 #include "tim.h"
 
-// Final wiring 2026-10-27: TB1->M4, TB2->M3, TB3->M1, TB4->M2, TB5->M5(base).
+// Verified physical wheels2026-10-29: TB1->M3, TB2->M4, TB3->M1, TB4->M2, TB5->M5.
 // Chassis array remains [M1(FL),M2(FR),M3(RL),M4(RR)]; M5 is the base.
 #define BOARD_MOTOR_MAP { \
     {GPIOD,GPIO_PIN_0,GPIOD,GPIO_PIN_1,&htim1,TIM_CHANNEL_3}, \
     {GPIOD,GPIO_PIN_2,GPIOD,GPIO_PIN_3,&htim1,TIM_CHANNEL_4}, \
-    {GPIOB,GPIO_PIN_2,GPIOB,GPIO_PIN_10,&htim1,TIM_CHANNEL_2}, \
-    {GPIOB,GPIO_PIN_0,GPIOB,GPIO_PIN_1,&htim1,TIM_CHANNEL_1} }
-// AB for M1/M2/M3/M4: PA5/PB3, PC6/7, PA6/7, PA0/1.
-#define BOARD_ENCODER_MAP {&htim2,&htim8,&htim3,&htim5}
+    {GPIOB,GPIO_PIN_0,GPIOB,GPIO_PIN_1,&htim1,TIM_CHANNEL_1}, \
+    {GPIOB,GPIO_PIN_2,GPIOB,GPIO_PIN_10,&htim1,TIM_CHANNEL_2} }
+// AB for M1/M2/M3/M4: PA5/PB3, PC6/7, PA0/1, PA6/7.
+#define BOARD_ENCODER_MAP {&htim2,&htim8,&htim5,&htim3}
 #define BOARD_STBY_1_PORT GPIOB
 #define BOARD_STBY_1_PIN GPIO_PIN_11
 #define BOARD_STBY_2_PORT GPIOD
@@ -26,11 +26,17 @@
 #define BOARD_RADIO_SPI hspi2
 #define BOARD_RADIO_SPI_TIMEOUT_MS 2U
 
-// Shared OLED / future sensor bus: I2C1, PB6 SCL / PB7 SDA, 100 kHz.
+// Shared OLED / INA219 bus: I2C1, PB6 SCL / PB7 SDA, 100 kHz.
 #define BOARD_DEVICE_I2C hi2c1
 #define BOARD_I2C_MAX_WRITE_SIZE 33U
 #define BOARD_I2C_LOCK_TIMEOUT_MS 5U
 #define BOARD_I2C_WRITE_TIMEOUT_MS 10U
+#define BOARD_I2C_GPIO_PORT GPIOB
+#define BOARD_I2C_SCL_PIN GPIO_PIN_6
+#define BOARD_I2C_SDA_PIN GPIO_PIN_7
+#define BOARD_I2C_GPIO_AF GPIO_AF4_I2C1
+#define BOARD_I2C_RECOVERY_INTERVAL_MS 1000U
+#define BOARD_I2C_NACK_RECOVERY_COUNT 3U
 // Core-board PA15 only, active low. PE6 is now J5 PWM: do not press its board button.
 #define BOARD_BUTTON_NEXT_PORT GPIOA
 #define BOARD_BUTTON_NEXT_PIN GPIO_PIN_15

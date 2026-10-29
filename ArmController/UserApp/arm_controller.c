@@ -69,10 +69,10 @@ void ArmController_Step(void)
  if((uint32_t)(Now-PrintTick)>=1000U)
  {
   PrintTick=Now;Remote_Status S=Controller_GetStatus();ArmTargets_Status T=ArmTargets_GetStatus();static char Text[256];
-  (void)snprintf(Text,sizeof(Text),"I2C RX=%lu ERR=%lu VALID=%u KEYS=%04X ACK=%u MODE=%u J=%u LOCK=%u N=%lu POTS=%u,%u,%u,%u,%u ADC=%u POT=%u STABLE=%u WAIT=%u BLOCK=%u\r\n",
+  (void)snprintf(Text,sizeof(Text),"I2C RX=%lu ERR=%lu VALID=%u KEYS=%04X ACK=%u MODE=%u J=%u LOCK=%u N=%lu POTS=%u,%u,%u,%u,%u ADC=%u POT=%u STABLE=%u WAIT=%u BLOCK=%u REC=%u\r\n",
    (unsigned long)ArmBoard_RxCount,(unsigned long)ArmBoard_Errors,Input.Valid,Input.Keys,
    S.LinkAck,S.Mode,S.SelectedJoint+1U,(unsigned)S.LastLockReason,(unsigned long)S.LockCount,
-   Pots[0],Pots[1],Pots[2],Pots[3],Pots[4],PotsValid,T.Active,T.Stable,T.EntryPending,(unsigned)T.EntryBlock);
+   Pots[0],Pots[1],Pots[2],Pots[3],Pots[4],PotsValid,T.Active,T.Stable,T.EntryPending,(unsigned)T.EntryBlock,S.Recovering);
   ArmBoard_Print(Text);
  }
 }

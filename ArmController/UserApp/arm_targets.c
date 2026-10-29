@@ -8,7 +8,6 @@
 #define ARM_TARGET_STABLE_MS 100U
 #define ARM_TARGET_STABLE_COUNTS 12U
 #define ARM_TARGET_ENTRY_WAIT_MS 3000U
-#define ARM_TARGET_LOSS_HOLD_MS 200U
 // Target slew per received sample (20 ms): 5 deg per frame, roughly 250 deg/s.
 // The main controller still applies its own 90 deg/s position ramp.
 #define ARM_TARGET_MAX_STEP_CDEG 500
@@ -16,14 +15,15 @@
 static const ArmTarget_Cal DefaultCal[ARM_TARGET_CHANNELS] =
 {
     // User-paired command-coordinate calibration, refreshed 2026-10-28.
-    // J1: new paired95/5deg anchors. J2/J4 retain the earlier three-pose fit.
+    // J1: retain paired slope, subtract20deg before mechanical clamping (2026-10-29 trial).
+    // J2/J4 retain the earlier three-pose fit.
     // J3: repeatable190deg at ADC2023 and270deg at3056; inconsistent later240deg pose excluded.
     // Keep rail values 0/4095 invalid: once active, hold only the affected channel.
     // Base zero ADC1964 retained. User reports90deg input gives about80deg at rest:
     // provisional9/8 correction about zero; do not alter encoder CPR or motor polarity.
     // These are command coordinates, not external joint-position feedback.
     {1, 4094, -18277, 16844, -1, -18000, 18000}, // base:9/8 gain, original zero and direction
-    {1, 4094, -13525, 20870, -1, 500, 15000}, // shoulder: ADC1354=95deg, ADC2425=5deg
+    {1, 4094, -15525, 18870, -1, 500, 15000}, // shoulder: ADC1354=75deg; lower targets clamp to5deg
     {1, 4094, 2341, 37323, 1, 2300, 18000}, // elbow
     {1, 4094, 3341, 35039, 1, 2200, 27000}, // pitch
     {1, 4094, -18543, 15408, 1, 0, 18000}, // roll
@@ -35,7 +35,7 @@ static int32_t FilteredAdc[ARM_TARGET_CHANNELS]; // Q8, 1/4 update at 20 ms.
 static uint8_t FilterMask;
 static int32_t Target[ARM_TARGET_CHANNELS];
 static uint8_t Mask, Active, Stable, LastPress, EntryPending;
-static uint32_t StableTick, EntryTick, LossTick;
+static uint32_t StableTick, EntryTick;
 static uint8_t LossPending;
 static ArmTargets_Status Snapshot;
 
@@ -74,7 +74,7 @@ void ArmTargets_Init(void)
     memset(Target, 0, sizeof(Target));
     memset(&Snapshot, 0, sizeof(Snapshot));
     Mask = Active = Stable = LastPress = EntryPending = 0;
-    StableTick = EntryTick = LossTick = 0;LossPending=0;
+    StableTick = EntryTick = 0;LossPending=0;
 }
 
 void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
@@ -85,15 +85,15 @@ void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
     uint8_t Toggle = (uint8_t)(Press && !LastPress);
     LastPress = Press;
     Remote_Status Status = Controller_GetStatus();
+    if(Status.Recovering || !Status.InputValid)Toggle=0;
     Snapshot.UpdateMs = NowMs;
     if(Status.Mode != REMOTE_ACTIVE)Active=EntryPending=0;
     if (Pots == NULL || !Valid)
     {
-        if(!LossPending){LossPending=1;LossTick=NowMs;}
-        // An isolated acquisition/bridge glitch freezes targets, never substitutes
-        // zero or invents a new target. Persistent loss exits; no automatic re-entry.
-        if(Active && Status.Mode==REMOTE_ACTIVE && !Leave && !Toggle &&
-           (uint32_t)(NowMs-LossTick)<ARM_TARGET_LOSS_HOLD_MS)
+        LossPending=1;
+        // Pause output without forgetting the operator's selected mode. Never
+        // substitute zero angles; fresh samples resume through the normal slew.
+        if(Active && Status.Mode==REMOTE_ACTIVE && !Leave && !Toggle)
         {
             Mask=Stable=0;Snapshot.ValidMask=Snapshot.Stable=0;
             Snapshot.Active=1;Snapshot.EntryPending=0;
@@ -139,10 +139,9 @@ void ArmTargets_Update(const uint16_t Pots[ARM_TARGET_CHANNELS], uint8_t Valid,
     // board is absent. Only control targets freeze; never gate ADC/angle reporting.
     if(!Status.InputValid)
     {
-        if(!LossPending){LossPending=1;LossTick=NowMs;}
+        LossPending=1;
         EntryPending=0;
-        if(Status.Mode!=REMOTE_ACTIVE || Leave || Toggle ||
-           (uint32_t)(NowMs-LossTick)>=ARM_TARGET_LOSS_HOLD_MS)Active=0;
+        if(Status.Mode!=REMOTE_ACTIVE || Leave || Toggle)Active=0;
         Snapshot.Active=Active;Snapshot.EntryPending=0;
         Snapshot.EntryBlock=ARM_TARGET_ENTRY_INPUT;
         return;
@@ -187,7 +186,7 @@ void ArmTargets_Apply(RemoteControl_FrameTypeDef *Frame)
     if (Frame->Version != REMOTE_CONTROL_VERSION_ROBOT) return;
     if (Frame->Flags & (REMOTE_CONTROL_FLAG_STOP | REMOTE_CONTROL_FLAG_RESUME)) return;
     Remote_Status Status = Controller_GetStatus();
-    if (Status.Mode != REMOTE_ACTIVE) return; // Brief invalid input holds the last targets until Update expires it.
+    if (Status.Mode != REMOTE_ACTIVE || Status.Recovering || !Status.InputValid || LossPending) return;
     Frame->Flags |= REMOTE_CONTROL_FLAG_ARM_TARGETS;
     for (uint8_t i = 0; i < ARM_TARGET_CHANNELS; i++)
     {

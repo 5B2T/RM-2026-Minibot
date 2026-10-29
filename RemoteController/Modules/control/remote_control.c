@@ -16,8 +16,18 @@ static void Lock(Remote_LockReason Reason,uint32_t NowMs)
  // Preserve the first cause of each lock; retries/secondary failures cannot overwrite it.
  if(Status.Mode!=REMOTE_LOCKED || Status.LastLockReason==REMOTE_LOCK_STARTUP)
  {Status.LastLockReason=Reason;Status.LastLockMs=NowMs;Status.LockCount++;}
- Status.Mode=REMOTE_LOCKED;Status.Vx=Status.Vy=Status.Wz=0;
+ Status.Mode=REMOTE_LOCKED;Status.Recovering=0;Status.Vx=Status.Vy=Status.Wz=0;
  Status.ArmBase=Status.JointRate=0;AwaitingAck=JointCentered=0;
+}
+static void LinkLost(Remote_LockReason Reason,uint32_t NowMs)
+{
+ Status.LinkAck=0;
+ if(Status.Mode!=REMOTE_ACTIVE || ExplicitStop){Lock(Reason,NowMs);return;}
+ // Retain the operator's authorization, but send only neutral RESUME until ACK.
+ // The car still stops at its100ms receive lease; no cached motion is replayed.
+ if(!Status.Recovering){Status.LastLockReason=Reason;Status.LastLockMs=NowMs;Status.LockCount++;}
+ Status.Recovering=1;Status.Vx=Status.Vy=Status.Wz=0;
+ Status.ArmBase=Status.JointRate=0;
 }
 void Controller_Lock(void)
 {Lock(REMOTE_LOCK_INTERNAL,UpdateTick);}
@@ -49,7 +59,7 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  Status.Keys=StableKeys;
  // GPIO keys remain usable for inspection even if ADC calibration/conversion fails.
  if(Keys&KEY_MASK(KEY_L_DOWN))Lock(REMOTE_LOCK_STOP_KEY,NowMs); // Global STOP bypasses debounce.
- if(Status.LinkAck&&(uint32_t)(NowMs-Status.LastAckMs)>=REMOTE_LINK_STALE_MS){Status.LinkAck=0;Lock(REMOTE_LOCK_ACK_TIMEOUT,NowMs);}
+ if(Status.LinkAck&&(uint32_t)(NowMs-Status.LastAckMs)>=REMOTE_LINK_STALE_MS)LinkLost(REMOTE_LOCK_ACK_TIMEOUT,NowMs);
  if(Status.Mode==REMOTE_RESUMING&&(uint32_t)(NowMs-ResumeTick)>=REMOTE_LINK_STALE_MS)Lock(REMOTE_LOCK_RESUME_TIMEOUT,NowMs);
  if(!Status.InputValid)
  {
@@ -81,6 +91,7 @@ void Controller_Update(const Remote_Input *Input,uint32_t NowMs)
  {Status.Mode=REMOTE_RESUMING;ResumeTick=NowMs;AwaitingAck=1;ExplicitStop=0;}
  if(Status.Mode==REMOTE_RESUMING&&!RecoveryIdle)Lock(REMOTE_LOCK_RESUME_MOVED,NowMs);
  if(Status.Mode!=REMOTE_ACTIVE)return;
+ if(Status.Recovering){Status.Vx=Status.Vy=Status.Wz=0;Status.ArmBase=Status.JointRate=0;return;}
  Status.Vx=Status.Axis[REMOTE_LEFT_Y_INDEX]*REMOTE_SPEED_MPS;
  Status.Vy=-Status.Axis[REMOTE_LEFT_X_INDEX]*REMOTE_SPEED_MPS;
  // Cap diagonal translation to the selected speed, preserve requested direction.
@@ -117,10 +128,16 @@ void Controller_OnTx(uint8_t Flags,uint8_t Ack,uint32_t NowMs)
 {
  if(!Ack){
   if(TxFailures<REMOTE_TX_FAILURE_LIMIT)TxFailures++;
-  if(TxFailures>=REMOTE_TX_FAILURE_LIMIT){Status.LinkAck=0;Lock(REMOTE_LOCK_TX_FAILED,NowMs);}
+  if(TxFailures>=REMOTE_TX_FAILURE_LIMIT)LinkLost(REMOTE_LOCK_TX_FAILED,NowMs);
   return;
  }
  TxFailures=0;Status.LinkAck=1;Status.LastAckMs=NowMs;
+ if(Flags==REMOTE_CONTROL_FLAG_RESUME && Status.Mode==REMOTE_ACTIVE && Status.Recovering && Status.InputValid)
+ {
+  Status.Recovering=0;
+  // Discard action edges during the outage, including a key held across return.
+  StableKeys=RawKeys;Status.Keys=StableKeys;KeyTick=NowMs;
+ }
  if(Flags==REMOTE_CONTROL_FLAG_RESUME&&AwaitingAck&&Status.Mode==REMOTE_RESUMING)
  {Status.Mode=REMOTE_ACTIVE;AwaitingAck=0;}
 }
@@ -132,7 +149,7 @@ void Controller_Command(RemoteControl_FrameTypeDef *Frame,uint8_t Sequence)
  Frame->Reserved[3]=Status.DeployCounter;Frame->Reserved[4]=Status.GripperCounter;
  if(Status.Mode==REMOTE_LOCKED)Frame->Flags=REMOTE_CONTROL_FLAG_STOP|
      (ExplicitStop?0:REMOTE_CONTROL_FLAG_PASSIVE_STOP);
- else if(Status.Mode==REMOTE_RESUMING)Frame->Flags=REMOTE_CONTROL_FLAG_RESUME;
+ else if(Status.Mode==REMOTE_RESUMING || Status.Recovering)Frame->Flags=REMOTE_CONTROL_FLAG_RESUME;
  else {
   Frame->M1=(int16_t)lroundf(Status.Vx*1000);Frame->M2=(int16_t)lroundf(Status.Vy*1000);Frame->M3=(int16_t)lroundf(Status.Wz*1000);
   Frame->M4=(int16_t)lroundf(Status.ArmBase*1000);
